@@ -1,0 +1,14 @@
+[project]
+authors = ["Joschka Goes <jajo_11@outlook.com>"]
+channels = ["conda-forge"]
+description = "Add a short description here"
+name = "jtl_min"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.12.5,<4"
+mypy = ">=1.11.2,<2"
+pixi-pycharm = ">=0.0.6,<0.0.7"
