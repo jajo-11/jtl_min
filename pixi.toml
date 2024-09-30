@@ -3,12 +3,26 @@ authors = ["Joschka Goes <jajo_11@outlook.com>"]
 channels = ["conda-forge"]
 description = "Add a short description here"
 name = "jtl_min"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
+[tasks.mypy]
+cmd = ["mypy", "--enable-incomplete-feature=NewGenericSyntax", "."]
+cwd = "src"
+
+[tasks.run]
+cmd = ["python", "src/main.py"]
+depends-on = ["mypy"]
+env = { PYTHONPATH = "$PIXI_PROJECT_ROOT/src" }
+
+[tasks.test]
+cmd = ["python", "-m", "unittest", "discover"]
+env = { PYTHONPATH = "$PIXI_PROJECT_ROOT/src" }
+cwd = "tests"
 
 [dependencies]
 python = ">=3.12.5,<4"
 mypy = ">=1.11.2,<2"
 pixi-pycharm = ">=0.0.6,<0.0.7"
+nasm = ">=2.16.3,<3"

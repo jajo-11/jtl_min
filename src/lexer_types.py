@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import List
 
 
 @dataclass(slots=True)
@@ -8,47 +9,79 @@ class CodeLocation:
     line: int
     col: int
     length: int
+    line_str: str
 
     def __repr__(self):
-        return f"{self.file_name}:{self.line+1}:{self.col+1}"
+        return f"{self.file_name}:{self.line + 1}:{self.col + 1}"
+
 
 @dataclass
 class Token:
     location: CodeLocation
 
+
 @dataclass(slots=True)
-class NewLineToken(Token):
+class TokenNewLine(Token):
     pass
 
+
 @dataclass(slots=True)
-class LiteralToken(Token):
+class TokenLiteral(Token):
     value: int
 
+
 @dataclass(slots=True)
-class NameToken(Token):
+class TokenName(Token):
     name: str
 
-class Operator(Enum):
-    PLUS = auto()
-    MINUS = auto()
-    TIMES = auto()
-    DIVIDE = auto()
-    MODULO = auto()
-    ASSIGNMENT = auto()
 
-OperatorBindingPower = {
-    Operator.PLUS: (2.5, 2),
-    Operator.MINUS: (2.5, 2),
-    Operator.TIMES: (3.5, 3),
-    Operator.DIVIDE: (3.5, 3),
-    Operator.MODULO: (3.5, 3),
-    Operator.ASSIGNMENT: (1, 1.5),
-}
+# Comma is not an operator it is only valid in Tuple like structures (works more like a NewLineToken)
+@dataclass(slots=True)
+class TokenComma(Token):
+    pass
+
+
+class Operator(Enum):
+    PLUS = "+"
+    MINUS = "-"
+    TIMES = "*"
+    DIVIDE = "/"
+    MODULO = "%"
+    ASSIGNMENT = "="
+    DOT = "."
+    COLON = ":"
+    EQUAL = "=="
+    NOTEQUAL = "!="
+    LESSEQUAL = "<="
+    GREATEREQUAL = ">="
+    LESS = "<"
+    GREATER = ">"
+    AND = "and"
+    OR = "or"
+    NOT = "not"
+
+    def __repr__(self):
+        return self.value
+
 
 @dataclass(slots=True)
-class OperatorToken(Token):
+class TokenOperator(Token):
     op: Operator
 
+
+class BracketType(Enum):
+    ROUND = "()"
+    SQUARE = "[]"
+    CURLY = "{}"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def __repr__(self) -> str:
+        return self.value
+
+
 @dataclass(slots=True)
-class BracketToken(Token):
+class TokenBracket(Token):
     open: bool
+    type: BracketType
