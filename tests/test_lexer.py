@@ -7,27 +7,31 @@ from lexer_types import *
 
 class TestLexer(unittest.TestCase):
     def test_basic(self):
-        test_content = "\nABC 123 * + - = */%sum123()32sda."
+        test_content = "\nABC 123 * + - = */%sum123()32sd_a.\n^&:"
         tokens = lex_file("test_file", test_content)
-        line_str = test_content.strip()
+        line_str = list(map(lambda x: x.strip(), test_content.splitlines()))
         expected_tokens = [
             TokenNewLine(location=CodeLocation("test_file", 0, 0, 1, "")),
-            TokenName(location=CodeLocation("test_file", 1, 0, 3, line_str), name="ABC"),
-            TokenLiteral(location=CodeLocation("test_file", 1, 4, 3, line_str), value=123),
-            TokenOperator(location=CodeLocation("test_file", 1, 8, 1, line_str), op=Operator.TIMES),
-            TokenOperator(location=CodeLocation("test_file", 1, 10, 1, line_str), op=Operator.PLUS),
-            TokenOperator(location=CodeLocation("test_file", 1, 12, 1, line_str), op=Operator.MINUS),
-            TokenOperator(location=CodeLocation("test_file", 1, 14, 1, line_str), op=Operator.ASSIGNMENT),
-            TokenOperator(location=CodeLocation("test_file", 1, 16, 1, line_str), op=Operator.TIMES),
-            TokenOperator(location=CodeLocation("test_file", 1, 17, 1, line_str), op=Operator.DIVIDE),
-            TokenOperator(location=CodeLocation("test_file", 1, 18, 1, line_str), op=Operator.MODULO),
-            TokenName(location=CodeLocation("test_file", 1, 19, 6, line_str), name="sum123"),
-            TokenBracket(location=CodeLocation("test_file", 1, 25, 1, line_str), open=True, type=BracketType.ROUND),
-            TokenBracket(location=CodeLocation("test_file", 1, 26, 1, line_str), open=False, type=BracketType.ROUND),
-            TokenLiteral(location=CodeLocation("test_file", 1, 27, 2, line_str), value=32),
-            TokenName(location=CodeLocation("test_file", 1, 29, 3, line_str), name="sda"),
-            TokenOperator(location=CodeLocation("test_file", 1, 32, 1, line_str), op=Operator.DOT),
-            TokenNewLine(location=CodeLocation("test_file", 1, 33, 1, line_str)),
+            TokenName(location=CodeLocation("test_file", 1, 0, 3, line_str[1]), name="ABC"),
+            TokenLiteral(location=CodeLocation("test_file", 1, 4, 3, line_str[1]), value=123),
+            TokenOperator(location=CodeLocation("test_file", 1, 8, 1, line_str[1]), op=Operator.TIMES),
+            TokenOperator(location=CodeLocation("test_file", 1, 10, 1, line_str[1]), op=Operator.PLUS),
+            TokenOperator(location=CodeLocation("test_file", 1, 12, 1, line_str[1]), op=Operator.MINUS),
+            TokenOperator(location=CodeLocation("test_file", 1, 14, 1, line_str[1]), op=Operator.ASSIGNMENT),
+            TokenOperator(location=CodeLocation("test_file", 1, 16, 1, line_str[1]), op=Operator.TIMES),
+            TokenOperator(location=CodeLocation("test_file", 1, 17, 1, line_str[1]), op=Operator.DIVIDE),
+            TokenOperator(location=CodeLocation("test_file", 1, 18, 1, line_str[1]), op=Operator.MODULO),
+            TokenName(location=CodeLocation("test_file", 1, 19, 6, line_str[1]), name="sum123"),
+            TokenBracket(location=CodeLocation("test_file", 1, 25, 1, line_str[1]), open=True, type=BracketType.ROUND),
+            TokenBracket(location=CodeLocation("test_file", 1, 26, 1, line_str[1]), open=False, type=BracketType.ROUND),
+            TokenLiteral(location=CodeLocation("test_file", 1, 27, 2, line_str[1]), value=32),
+            TokenName(location=CodeLocation("test_file", 1, 29, 4, line_str[1]), name="sd_a"),
+            TokenOperator(location=CodeLocation("test_file", 1, 33, 1, line_str[1]), op=Operator.DOT),
+            TokenNewLine(location=CodeLocation("test_file", 1, 34, 1, line_str[1])),
+            TokenOperator(location=CodeLocation("test_file", 2, 0, 1, line_str[2]), op=Operator.POINTER),
+            TokenOperator(location=CodeLocation("test_file", 2, 1, 1, line_str[2]), op=Operator.ADDRESS_OFF),
+            TokenOperator(location=CodeLocation("test_file", 2, 2, 1, line_str[2]), op=Operator.COLON),
+            TokenNewLine(location=CodeLocation("test_file", 2, 3, 1, line_str[2])),
         ]
         for x, y in zip(expected_tokens, tokens):
             self.assertEqual(x, y)
@@ -68,6 +72,19 @@ class TestLexer(unittest.TestCase):
         self.assertEqual(LexerErrorType.UNIMPLEMENTED.value[0], context.exception.title)
         self.assertEqual(LexerErrorType.UNIMPLEMENTED.value[1], context.exception.message)
         self.assertEqual(5, context.exception.location.col)
+
+    def test_keywords(self):
+        test_content = " ".join(map(lambda x: x.value, iter(Keyword)))
+        tokens = lex_file("test_file", test_content)
+        col = 0
+        for kwd, tkn in zip(Keyword, tokens):
+            self.assertEqual(kwd, tkn.keyword)
+            self.assertEqual(tkn.location.file_name, "test_file")
+            self.assertEqual(tkn.location.line, 0)
+            self.assertEqual(tkn.location.col, col)
+            self.assertEqual(tkn.location.length, len(kwd.value))
+            self.assertEqual(tkn.location.line_str, test_content)
+            col += 1 + len(kwd.value)
 
 
 if __name__ == '__main__':

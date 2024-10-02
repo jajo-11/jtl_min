@@ -1,0 +1,5 @@
+const vec3 = record (
+    x: int,
+    y: int,
+    z: int,
+)

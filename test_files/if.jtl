@@ -1,6 +1,10 @@
-if sum <= 1 {
+var sum = 1
+if sum <= 1 then {
     print(sum)
     sum = (sum + 1) * sum
+    {
+        let a = 1 * 2
+    }
 }
 
-no = if sum > 0 and 1 == 1 {sum} else {-sum}
+let no = if sum > 0 and 1 == 1 then sum else -sum

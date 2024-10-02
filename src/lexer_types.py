@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum, auto
-from typing import List
+from enum import Enum
 
 
 @dataclass(slots=True)
@@ -35,6 +34,37 @@ class TokenName(Token):
     name: str
 
 
+@dataclass(slots=True)
+class TokenStringLiteral(Token):
+    content: str
+
+
+class Keyword(Enum):
+    VARIABLE = "var"
+    LET = "let"
+    CONSTANT = "const"
+    IF = "if"
+    ELSE = "else"
+    THEN = "then"
+    PROCEDURE = "proc"
+    RETURN = "return"
+    RECORD = "record"
+    FOR = "for"
+    WHILE = "while"
+    INOUT = "inout"
+    OWNED = "owned"
+    REFERENCE = "ref"
+    IN = "in"
+
+    def __repr__(self) -> str:
+        return self.value
+
+
+@dataclass(slots=True)
+class TokenKeyword(Token):
+    keyword: Keyword
+
+
 # Comma is not an operator it is only valid in Tuple like structures (works more like a NewLineToken)
 @dataclass(slots=True)
 class TokenComma(Token):
@@ -59,6 +89,8 @@ class Operator(Enum):
     AND = "and"
     OR = "or"
     NOT = "not"
+    ADDRESS_OFF = "&"
+    POINTER = "^"
 
     def __repr__(self):
         return self.value

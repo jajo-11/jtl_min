@@ -6,8 +6,9 @@ class PeakableIterator[T]:
         self.it = iter(it)
         self.last: Optional[T] = None
         self.next_element: Optional[T] = None
-        self._empty: bool = False
         self.empty_value = empty_value
+        self._empty: bool = False
+        self._moved = True
 
     def __iter__(self):
         return self
@@ -15,7 +16,19 @@ class PeakableIterator[T]:
     def next(self) -> T:
         return self.__next__()
 
+    def has_moved(self) -> bool:
+        """
+        Returns `True` if the iterator has moved since last `has_moved` call, `False` otherwise.
+        First call always returns `True`
+        """
+        if self._moved:
+            self._moved = False
+            return True
+        else:
+            return False
+
     def __next__(self) -> T:
+        self._moved = True
         if self.next_element is None:
             try:
                 self.last = next(self.it)
