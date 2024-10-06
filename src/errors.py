@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from elaborate_types import Type
 from lexer_types import CodeLocation
 
 
@@ -70,3 +71,43 @@ class ParserError(JTLError):
     @classmethod
     def from_type(cls, type: ParserErrorType, location: CodeLocation) -> "ParserError":
         return cls(type.value[0], type.value[1], location)
+
+
+class ElaborationErrorType(Enum):
+    NO_ASSIGNMENT_DECLARATION = ("Invalid Declaration",
+                                 "A declaration started by 'const', 'let' or 'var' must contain an assignment")
+    EXPECTED_NAME = ("Invalid Declaration", "Expected a name here")
+    EXPECTED_TYPE = ("Invalid Type", "Expected a type or type modifier here")
+    EXPECTED_VALUE = ("Missing Value", "no value to assign to name")
+    UNDECLARED_NAME = ("Undeclared Name", "this name has not been declared (yet)")
+    NON_CONSTANT_IN_CONSTANT_EXPRESSION = ("Non-constant expression", "value only valid at runtime")
+
+
+@dataclass
+class ElaborationError(JTLError):
+    location: CodeLocation
+
+    def __str__(self) -> str:
+        return f"[Elaboration Error] {self.title} [{self.location}]:\n{self.message}\n"
+
+    @classmethod
+    def from_type(cls, type: ElaborationErrorType, location: CodeLocation) -> "ElaborationError":
+        return cls(type.value[0], type.value[1], location)
+
+
+class JTLTypeErrorType(Enum):
+    TYPE_MISSMATCH_DECLARATION = ("Type Error", "Declared type {} does not match expression type {}")
+
+
+@dataclass
+class JTLTypeError(JTLError):
+    location: CodeLocation
+    type_a: Type
+    type_b: Type
+
+    def __str__(self) -> str:
+        return f"[Type Error] {self.title} [{self.location}]:\n{self.message.format(self.type_a, self.type_b)}\n"
+
+    @classmethod
+    def from_type(cls, type: JTLTypeErrorType, location: CodeLocation, type_a, type_b) -> "JTLTypeError":
+        return cls(type.value[0], type.value[1], location, type_a, type_b)

@@ -10,6 +10,12 @@ class CodeLocation:
     length: int
     line_str: str
 
+    def whole_line(self) -> "CodeLocation":
+        # FIXME: assume all uses as a bug and implement proper CodeLocationRanges
+        # This should include multi-line locations and a recursive function for all
+        # ast nodes to determine the full extend of a node
+        return CodeLocation(self.file_name, self.line, 0, len(self.line_str), self.line_str)
+
     def __repr__(self):
         return f"{self.file_name}:{self.line + 1}:{self.col + 1}"
 
@@ -25,8 +31,13 @@ class TokenNewLine(Token):
 
 
 @dataclass(slots=True)
-class TokenLiteral(Token):
-    value: int
+class TokenNumberLiteral(Token):
+    value: int | float
+
+
+@dataclass(slots=True)
+class TokenBoolLiteral(Token):
+    value: bool
 
 
 @dataclass(slots=True)
@@ -65,6 +76,36 @@ class TokenKeyword(Token):
     keyword: Keyword
 
 
+class BuildInType(Enum):
+    INT = "int"
+    UINT = "uint"
+    FLOAT = "float"
+    BOOL = "bool"
+    STRING = "str"
+    CHAR = "char"
+    I8 = "i8"
+    I16 = "i16"
+    I32 = "i32"
+    I64 = "i64"
+    ISIZE = "isize"
+    USIZE = "usize"
+    U8 = "u8"
+    U16 = "u16"
+    U32 = "u32"
+    U64 = "u64"
+    F32 = "f32"
+    F64 = "f64"
+    TYPE = "type"
+
+    def __repr__(self) -> str:
+        return self.value
+
+
+@dataclass(slots=True)
+class TokenBuildInType(Token):
+    type: BuildInType
+
+
 # Comma is not an operator it is only valid in Tuple like structures (works more like a NewLineToken)
 @dataclass(slots=True)
 class TokenComma(Token):
@@ -92,7 +133,7 @@ class Operator(Enum):
     ADDRESS_OFF = "&"
     POINTER = "^"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.value
 
 

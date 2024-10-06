@@ -14,16 +14,20 @@ class ASTNode:
 
 @dataclass(slots=True)
 class ASTNodeValue(ASTNode):
-    token: TokenLiteral | TokenName | TokenStringLiteral
+    token: TokenNumberLiteral | TokenName | TokenStringLiteral | TokenBoolLiteral | TokenBuildInType
 
     def __repr__(self) -> str:
         match self.token:
-            case TokenLiteral():
+            case TokenNumberLiteral():
                 return str(self.token.value)
             case TokenName():
                 return self.token.name
             case TokenStringLiteral():
                 return f"\"{self.token.content}\""
+            case TokenBoolLiteral():
+                return str(self.token.value)
+            case TokenBuildInType():
+                return self.token.type.value
 
 
 @dataclass(slots=True)

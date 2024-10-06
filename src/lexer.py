@@ -66,7 +66,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 while ud.category(it.peak()[1]) in {'Ll', 'Lu', 'Lo', 'Nd'} or it.peak()[1] == "_":
                     col_nr, char = it.next()
                 loc.length = col_nr - loc.col + 1
-                name = line[loc.col:col_nr+1]
+                name = line[loc.col:col_nr + 1]
                 match name:
                     case "var":
                         tokens.append(TokenKeyword(loc, Keyword.VARIABLE))
@@ -104,18 +104,63 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                         tokens.append(TokenKeyword(loc, Keyword.REFERENCE))
                     case "in":
                         tokens.append(TokenKeyword(loc, Keyword.IN))
+                    case "true":
+                        tokens.append(TokenBoolLiteral(loc, True))
+                    case "false":
+                        tokens.append(TokenBoolLiteral(loc, False))
+                    case "int":
+                        tokens.append(TokenBuildInType(loc, BuildInType.INT))
+                    case "float":
+                        tokens.append(TokenBuildInType(loc, BuildInType.FLOAT))
+                    case "bool":
+                        tokens.append(TokenBuildInType(loc, BuildInType.BOOL))
+                    case "str":
+                        tokens.append(TokenBuildInType(loc, BuildInType.STRING))
+                    case "char":
+                        tokens.append(TokenBuildInType(loc, BuildInType.CHAR))
+                    case "i8":
+                        tokens.append(TokenBuildInType(loc, BuildInType.I8))
+                    case "i16":
+                        tokens.append(TokenBuildInType(loc, BuildInType.I16))
+                    case "i32":
+                        tokens.append(TokenBuildInType(loc, BuildInType.I32))
+                    case "i64":
+                        tokens.append(TokenBuildInType(loc, BuildInType.I64))
+                    case "isize":
+                        tokens.append(TokenBuildInType(loc, BuildInType.ISIZE))
+                    case "usize":
+                        tokens.append(TokenBuildInType(loc, BuildInType.USIZE))
+                    case "u8":
+                        tokens.append(TokenBuildInType(loc, BuildInType.U8))
+                    case "u16":
+                        tokens.append(TokenBuildInType(loc, BuildInType.U16))
+                    case "u32":
+                        tokens.append(TokenBuildInType(loc, BuildInType.U32))
+                    case "u64":
+                        tokens.append(TokenBuildInType(loc, BuildInType.U64))
+                    case "uint":
+                        tokens.append(TokenBuildInType(loc, BuildInType.UINT))
+                    case "f32":
+                        tokens.append(TokenBuildInType(loc, BuildInType.F32))
+                    case "f64":
+                        tokens.append(TokenBuildInType(loc, BuildInType.F64))
+                    case "type":
+                        tokens.append(TokenBuildInType(loc, BuildInType.TYPE))
                     case _:
                         tokens.append(TokenName(loc, name))
             elif ud.category(char) == 'Nd':
                 loc = location()
                 while ud.category(it.peak()[1]) in {'Nd'}:
-                    col_nr, char = next(it)
-                loc.length = col_nr - loc.col + 1
-                tokens.append(TokenLiteral(loc, int(line[loc.col:col_nr+1])))
+                    col_nr, char = it.next()
+                if it.peak()[1] == ".":
+                    finish_parsing_float(it, line, loc, tokens)
+                else:
+                    loc.length = col_nr - loc.col + 1
+                    tokens.append(TokenNumberLiteral(loc, int(line[loc.col:col_nr + 1])))
             elif char == "\"":
                 loc = location()
                 while it.peak()[1] != "\"":
-                    col_nr, char = next(it)
+                    col_nr, char = it.next()
                 loc.length = col_nr - loc.col + 1
                 if it.peak()[1] != "\"":
                     raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
@@ -148,7 +193,11 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
             elif char == ",":
                 tokens.append(TokenComma(location()))
             elif char == ".":
-                tokens.append(TokenOperator(location(), Operator.DOT))
+                if ud.category(it.peak()[1]) in {'Nd'}:
+                    loc = location()
+                    finish_parsing_float(it, line, loc, tokens)
+                else:
+                    tokens.append(TokenOperator(location(), Operator.DOT))
             elif char == ":":
                 tokens.append(TokenOperator(location(), Operator.COLON))
             elif char == "&":
@@ -169,3 +218,11 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 raise LexerError.from_type(LexerErrorType.INVALID, location())
         tokens.append(TokenNewLine(location(start_col=len(line))))
     return tokens
+
+
+def finish_parsing_float(it: PeakableIterator, line: str, loc: CodeLocation, tokens: List[Token]):
+    col_nr, char = it.next()
+    while ud.category(it.peak()[1]) in {'Nd'}:
+        col_nr, char = it.next()
+    loc.length = col_nr - loc.col + 1
+    tokens.append(TokenNumberLiteral(loc, float(line[loc.col:col_nr + 1])))

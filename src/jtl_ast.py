@@ -86,6 +86,19 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
     lhs: ASTNode
 
     match lhs_token := it.next():
+        case TokenNumberLiteral() | TokenName() | TokenStringLiteral() | TokenBoolLiteral() | TokenBuildInType():
+            lhs = ASTNodeValue(lhs_token)
+        case(TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
+             | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)):
+            bp_right = UnaryBindingPower[lhs_token.op]
+            rhs = parse_expr(it, bp_right, ignore_new_line)
+            if rhs is None:
+                return None
+            lhs = ASTNodeUnary(lhs_token, rhs)
+        case (TokenKeyword(keyword=Keyword.RETURN) | TokenKeyword(keyword=Keyword.CONSTANT)
+              | TokenKeyword(keyword=Keyword.VARIABLE) | TokenKeyword(keyword=Keyword.LET)):
+            child = parse_expr(it, 0.0, ignore_new_line)
+            return ASTNodeStatement(lhs_token, child)
         case TokenKeyword(keyword=Keyword.IF):
             if (condition := parse_expr(it)) is None:
                 raise ParserError.from_type(ParserErrorType.EXPECTED_CONDITION, lhs_token.location)
@@ -123,19 +136,6 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, curly_bracket.location)
             lhs = ASTNodeWhile(lhs_token, condition, nodes)
-        case TokenLiteral() | TokenName() | TokenStringLiteral():
-            lhs = ASTNodeValue(lhs_token)
-        case (TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
-              | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)):
-            bp_right = UnaryBindingPower[lhs_token.op]
-            rhs = parse_expr(it, bp_right, ignore_new_line)
-            if rhs is None:
-                return None
-            lhs = ASTNodeUnary(lhs_token, rhs)
-        case (TokenKeyword(keyword=Keyword.RETURN) | TokenKeyword(keyword=Keyword.CONSTANT)
-              | TokenKeyword(keyword=Keyword.VARIABLE) | TokenKeyword(keyword=Keyword.LET)):
-            child = parse_expr(it, 0.0, ignore_new_line)
-            return ASTNodeStatement(lhs_token, child)
         case TokenKeyword(keyword=Keyword.RECORD):
             match bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
