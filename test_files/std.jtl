@@ -1,0 +1,6 @@
+// The interim JTL standard library
+import builtin
+
+const print = proc(msg: str) {
+    builtin.syscall(rax=0, rdi=1, rsi=msg.value, rdx=msg.length)
+}

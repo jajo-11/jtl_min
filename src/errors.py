@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Tuple
 
-from elaborate_types import Type
 from lexer_types import CodeLocation
 
 
@@ -44,7 +44,7 @@ class ParserErrorType(Enum):
     UNEXPECTED_TOKEN = ("Unexpected token", "Parser did not expect this (compiler error)")
     UNOPENED_BRACKET = ("Unopened bracket", "closed here")
     UNCLOSED_BRACKET = ("Unclosed bracket", "opened here")
-    EXPECTED_ATOM = ("Expected atom", "expected a value here")
+    EXPECTED_ATOM = ("Expected value", "expected a value here")
     EXPECTED_OPERATOR = ("Expected operator", "expected some form of operator (compiler error)")
     UNEXPECTED_TUPLE_TERMINATOR =\
         ("Unexpected token", "Parser did not expect this at the end of tuple (compiler error)")
@@ -59,6 +59,7 @@ class ParserErrorType(Enum):
     EXPECTED_RETURN_TYPE = ("Unexpected token", "expected return type here")
     EXPECTED_BODY = ("Unexpected token", "expected procedure body here")
     EXPECTED_BODY_WHILE = ("Unexpected token", "expected loop body here")
+    EMPTY_TUPLE = ("Expected value", "() is not a valid value")
 
 
 @dataclass
@@ -76,38 +77,65 @@ class ParserError(JTLError):
 class ElaborationErrorType(Enum):
     NO_ASSIGNMENT_DECLARATION = ("Invalid Declaration",
                                  "A declaration started by 'const', 'let' or 'var' must contain an assignment")
-    EXPECTED_NAME = ("Invalid Declaration", "Expected a name here")
+    EXPECTED_NAME_DECLARATION = ("Invalid Declaration", "Expected a name here")
+    UN_ASSIGNABLE = ("Syntax error", "Can not assign a value to this")
     EXPECTED_TYPE = ("Invalid Type", "Expected a type or type modifier here")
     EXPECTED_VALUE = ("Missing Value", "no value to assign to name")
     UNDECLARED_NAME = ("Undeclared Name", "this name has not been declared (yet)")
+    UNDECLARED_PROC = ("Undeclared Name", "this procedure has not been declared (yet)")
+    NOT_CALLABLE = ("Unexpected Call", "this object is not callable")
     NON_CONSTANT_IN_CONSTANT_EXPRESSION = ("Non-constant expression", "value only valid at runtime")
+    UNEXPECTED_TYPE_MODIFIER = ("Unexpected Operator", "This operator is only valid in types")
+    ADDRESS_OF_UNASSIGNED = ("No Address", "Can only take address of assigned variables")
+    UNEXPECTED_STATEMENT = ("Unexpected Statement", "expected an expression got a statement")
+    NOT_MUTABLE = ("Assignment Error", "Can not reassign a {} valued name")
+    MISSING_TYPE = ("Missing Type", "Procedure arguments need type information")
+    CAN_NOT_RETURN_FROM_HERE = ("Unexpected Statement", "Can only return from procedures")
+    UNREACHABLE = ("Unreachable Expression", "Procedure returns before this can be executed")
+    WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, expected {}")
+    WRONG_ARGUMENT_TYPE = ("Procedure signature missmatch", "Expected argument {} to have type {} got {}")
 
 
 @dataclass
 class ElaborationError(JTLError):
     location: CodeLocation
+    args: Tuple[Any]
 
     def __str__(self) -> str:
-        return f"[Elaboration Error] {self.title} [{self.location}]:\n{self.message}\n"
+        return f"[Elaboration Error] {self.title} [{self.location}]:\n{self.message.format(*self.args)}\n"
 
     @classmethod
-    def from_type(cls, type: ElaborationErrorType, location: CodeLocation) -> "ElaborationError":
-        return cls(type.value[0], type.value[1], location)
+    def from_type(cls, type: ElaborationErrorType, location: CodeLocation, *args) -> "ElaborationError":
+        return cls(type.value[0], type.value[1], location, args)
 
 
 class JTLTypeErrorType(Enum):
     TYPE_MISSMATCH_DECLARATION = ("Type Error", "Declared type {} does not match expression type {}")
+    NO_VALUE_TYPE = ("Missing Value", "Expression returns no value for {} to operate on")
+    POINTER_ARITHMETIC = ("Invalid Operation", "arithmetic operations on pointers is forbidden")
+    NOT_NUMERIC = ("Not a numeric type", "cannot do arithmetic on non-numeric type")
+    NOT_NUMERIC_COMPARE = ("Not a numeric type", "cannot compare non-numeric type")
+    INCOMPATIBLE_TYPE_GROUP = ("Incompatible type", "{} is incompatible with type {}")
+    UNSAFE_AUTOMATIC_CAST = ("Incompatible type", "{} and {} can not be promoted to an int that can hold all values")
+    NOT_COMPARABLE = ("Incompatible type", "Can not compare {} and {}")
+    INCOMPATIBLE_POINTER = ("Incompatible type", "to compare pointers they must point to a value of the same type."
+                                                 " But they point to {} and {}")
+    EXPECTED_BOOLEAN_2x = ("Incompatible type", "Can not use '{}' on non booleans ({}, {})")
+    EXPECTED_BOOLEAN = ("Incompatible type", "Can not use '{}' on non booleans of type {}")
+    UNSAFE_UINT_TO_INT = ("Incompatible type", "Can not convert {} to an int as a 64bit int can not hold all values")
+    DEREFERENCE_VALUE = ("Incompatible type", "Can not dereference value")
+    EXPECTED_BOOLEAN_CONDITION = ("Unexpected type", "Condition must return/be a boolean value not {}")
+    TYPE_MISSMATCH_RETURN = ("Type Error", "Returned value of type {}, expected a value of {}")
 
 
 @dataclass
 class JTLTypeError(JTLError):
     location: CodeLocation
-    type_a: Type
-    type_b: Type
+    fmt_args: Tuple[Any]
 
     def __str__(self) -> str:
-        return f"[Type Error] {self.title} [{self.location}]:\n{self.message.format(self.type_a, self.type_b)}\n"
+        return f"[Type Error] {self.title} [{self.location}]:\n{self.message.format(*self.fmt_args)}\n"
 
     @classmethod
-    def from_type(cls, type: JTLTypeErrorType, location: CodeLocation, type_a, type_b) -> "JTLTypeError":
-        return cls(type.value[0], type.value[1], location, type_a, type_b)
+    def from_type(cls, type: JTLTypeErrorType, location: CodeLocation, *args) -> "JTLTypeError":
+        return cls(type.value[0], type.value[1], location, args)

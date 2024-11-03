@@ -104,14 +104,18 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                         tokens.append(TokenKeyword(loc, Keyword.REFERENCE))
                     case "in":
                         tokens.append(TokenKeyword(loc, Keyword.IN))
+                    case "cast":
+                        tokens.append(TokenKeyword(loc, Keyword.CAST))
+                    case "distinct":
+                        tokens.append(TokenKeyword(loc, Keyword.DISTINCT))
+                    case "defer":
+                        tokens.append(TokenKeyword(loc, Keyword.DEFER))
                     case "true":
                         tokens.append(TokenBoolLiteral(loc, True))
                     case "false":
                         tokens.append(TokenBoolLiteral(loc, False))
                     case "int":
                         tokens.append(TokenBuildInType(loc, BuildInType.INT))
-                    case "float":
-                        tokens.append(TokenBuildInType(loc, BuildInType.FLOAT))
                     case "bool":
                         tokens.append(TokenBuildInType(loc, BuildInType.BOOL))
                     case "str":
@@ -187,7 +191,10 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
             elif char == "*":
                 tokens.append(TokenOperator(location(), Operator.TIMES))
             elif char == "/":
-                tokens.append(TokenOperator(location(), Operator.DIVIDE))
+                if it.peak()[1] == "/":
+                    break
+                else:
+                    tokens.append(TokenOperator(location(), Operator.DIVIDE))
             elif char == "%":
                 tokens.append(TokenOperator(location(), Operator.MODULO))
             elif char == ",":

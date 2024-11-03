@@ -1,12 +1,21 @@
-from dataclasses import dataclass
+from dataclasses import field
 from typing import List, Optional
 
-from lexer_types import *
+from typing import TYPE_CHECKING
 
+from lexer_types import *
+from typing_types import Type, TypeType, Name
+
+if TYPE_CHECKING:
+    from elaboration_types import Scope
 
 @dataclass
 class ASTNode:
     token: Token
+    type: int = field(init=False)
+
+    def __post_init__(self):
+        self.type = 0
 
     def __repr__(self):
         return str(self.token)
@@ -14,7 +23,7 @@ class ASTNode:
 
 @dataclass(slots=True)
 class ASTNodeValue(ASTNode):
-    token: TokenNumberLiteral | TokenName | TokenStringLiteral | TokenBoolLiteral | TokenBuildInType
+    token: Token
 
     def __repr__(self) -> str:
         match self.token:
@@ -28,6 +37,8 @@ class ASTNodeValue(ASTNode):
                 return str(self.token.value)
             case TokenBuildInType():
                 return self.token.type.value
+            case _:
+                raise RuntimeError(f"Bad Value {self.token}")
 
 
 @dataclass(slots=True)
@@ -60,17 +71,22 @@ class ASTNodeUnaryRight(ASTNode):
 
 @dataclass(slots=True)
 class ASTNodeTupleLike(ASTNode):
-    token: TokenBracket
+    token: TokenBracket | TokenKeyword
     children: List[ASTNode]
     parent: Optional[ASTNode] = None
 
     def __repr__(self) -> str:
-        return f"({self.token.type} {self.parent} [{" ".join(map(str, self.children))}])"
+        match self.token:
+            case TokenKeyword():
+                return f"({self.token.keyword.value} {self.parent} [{" ".join(map(str, self.children))}])"
+            case TokenBracket():
+                return f"({self.token.type} {self.parent} [{" ".join(map(str, self.children))}])"
 
 
 @dataclass(slots=True)
 class ASTNodeScope(ASTNode):
     nodes: List[ASTNode]
+    elaborated_body: Optional["Scope"] = None
 
     def __repr__(self) -> str:
         return "\n".join(map(lambda x: "#" + str(x), self.nodes))
@@ -94,6 +110,7 @@ class ASTNodeWhile(ASTNode):
     token: TokenKeyword
     condition: ASTNode
     body: List[ASTNode]
+    elaborated_body: Optional["Scope"] = None
 
     def __repr__(self) -> str:
         body = "\n".join(map(lambda x: "   #" + str(x), self.body))
@@ -103,13 +120,15 @@ class ASTNodeWhile(ASTNode):
 @dataclass(slots=True)
 class ASTNodeProcedure(ASTNode):
     token: TokenKeyword
-    arguments: ASTNodeTupleLike
-    return_type: Optional[ASTNode]
+    arguments: List[ASTNode]
+    return_type_expr: Optional[ASTNode]
     body: List[ASTNode]
+    argument_names: List[Name] = field(default_factory=list)
+    elaborated_body: Optional["Scope"] = None
 
     def __repr__(self) -> str:
         body = "\n".join(map(lambda x: "   #" + str(x), self.body))
-        return f"(proc {self.arguments} {self.return_type}\n body:\n{body}\n)"
+        return f"(proc {self.arguments} {self.return_type_expr}\n body:\n{body}\n)"
 
 
 @dataclass(slots=True)
@@ -119,6 +138,25 @@ class ASTNodeStatement(ASTNode):
 
     def __repr__(self) -> str:
         return f"({self.token.keyword.value} {self.value})"
+
+
+@dataclass(slots=True)
+class ASTNodeCast(ASTNode):
+    node: ASTNode
+
+    def __repr__(self) -> str:
+        return f"(cast {self.type} {self.node})"
+
+@dataclass(slots=True)
+class ASTNodeAssignment(ASTNode):
+    node: ASTNodeBinary
+    name: Name
+    expression: ASTNode
+
+@dataclass(slots=True)
+class ASTNodeCall(ASTNode):
+    procedure: Name
+    arguments: List[ASTNode]
 
 
 # associativity is encoded by biasing the binding power

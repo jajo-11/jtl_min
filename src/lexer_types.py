@@ -66,6 +66,9 @@ class Keyword(Enum):
     OWNED = "owned"
     REFERENCE = "ref"
     IN = "in"
+    CAST = "cast"
+    DISTINCT = "distinct"
+    DEFER = "defer"
 
     def __repr__(self) -> str:
         return self.value
@@ -79,7 +82,6 @@ class TokenKeyword(Token):
 class BuildInType(Enum):
     INT = "int"
     UINT = "uint"
-    FLOAT = "float"
     BOOL = "bool"
     STRING = "str"
     CHAR = "char"

@@ -1,6 +1,6 @@
 var sum = 1
 if sum <= 1 then {
-    print(sum)
+    // print(sum)
     sum = (sum + 1) * sum
     {
         let a = 1 * 2

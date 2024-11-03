@@ -1,4 +1,5 @@
 # file name must be jtl_ast and not ast as not to collide with internal python file ast.py
+from copy import copy
 from typing import Iterable
 
 from ast_types import *
@@ -96,7 +97,8 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 return None
             lhs = ASTNodeUnary(lhs_token, rhs)
         case (TokenKeyword(keyword=Keyword.RETURN) | TokenKeyword(keyword=Keyword.CONSTANT)
-              | TokenKeyword(keyword=Keyword.VARIABLE) | TokenKeyword(keyword=Keyword.LET)):
+              | TokenKeyword(keyword=Keyword.VARIABLE) | TokenKeyword(keyword=Keyword.LET)
+              | TokenKeyword(keyword=Keyword.DEFER) | TokenKeyword(keyword=Keyword.DISTINCT)):
             child = parse_expr(it, 0.0, ignore_new_line)
             return ASTNodeStatement(lhs_token, child)
         case TokenKeyword(keyword=Keyword.IF):
@@ -136,25 +138,26 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, curly_bracket.location)
             lhs = ASTNodeWhile(lhs_token, condition, nodes)
-        case TokenKeyword(keyword=Keyword.RECORD):
+        case TokenKeyword(keyword=Keyword.RECORD) | TokenKeyword(keyword=Keyword.CAST):
             match bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
                     it.next()
-                    lhs = parse_tuple_like(it, bracket, ASTNode(lhs_token))
+                    nodes = parse_tuple_like(it, bracket)
+                    lhs = ASTNodeTupleLike(lhs_token, nodes, None)
                 case _:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_BRACKET, it.peak().location)
         case TokenBracket(open=True, type=BracketType.ROUND):
-            if (tmp := parse_expr(it, ignore_new_line=True)) is None:
-                raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, lhs_token.location)
+            nodes = parse_tuple_like(it, lhs_token)
+            if len(nodes) == 0:
+                # TODO make location a span over all the lines of (...)
+                raise ParserError.from_type(ParserErrorType.EMPTY_TUPLE, lhs_token.location)
+            elif len(nodes) == 1:
+                lhs = nodes[0]
             else:
-                lhs = tmp
-            match it.next():
-                case TokenBracket(open=False, type=BracketType.ROUND):
-                    pass
-                case _:
-                    raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, lhs_token.location)
+                lhs = ASTNodeTupleLike(lhs_token, nodes, None)
         case TokenBracket(open=True, type=BracketType.SQUARE):
-            lhs = parse_tuple_like(it, lhs_token, None)
+            nodes = parse_tuple_like(it, lhs_token)
+            lhs = ASTNodeTupleLike(lhs_token, nodes, None)
         case TokenBracket(open=True, type=BracketType.CURLY):
             nodes = parse_list_of_exprs(it, end_on_curly=True)
             match end_token := it.peak():
@@ -167,7 +170,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
             match open_bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
                     it.next()
-                    tuple_like = parse_tuple_like(it, open_bracket, None)
+                    arguments = parse_tuple_like(it, open_bracket)
                 case _:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_BRACKET, open_bracket.location)
             match colon := it.peak():
@@ -188,7 +191,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                     it.next()
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, end_token.location)
-            lhs = ASTNodeProcedure(lhs_token, tuple_like, type_expr, proc_body)
+            lhs = ASTNodeProcedure(lhs_token, arguments, type_expr, proc_body)
         case _:
             raise ParserError.from_type(ParserErrorType.EXPECTED_ATOM, lhs_token.location)
 
@@ -214,7 +217,8 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 if CallBindingPower < bp_in:
                     break
                 it.next()
-                lhs = parse_tuple_like(it, op_token, lhs)
+                nodes = parse_tuple_like(it, op_token)
+                lhs = ASTNodeTupleLike(op_token, nodes, lhs)
             case (TokenBracket(open=False) | TokenComma() | TokenKeyword(keyword=Keyword.THEN)
                   | TokenKeyword(keyword=Keyword.ELSE)):
                 break
@@ -231,7 +235,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
     return lhs
 
 
-def parse_tuple_like(it: PeakableTokenIterator, token: TokenBracket, parent: Optional[ASTNode]) -> ASTNodeTupleLike:
+def parse_tuple_like(it: PeakableTokenIterator, token: TokenBracket) -> List[ASTNode]:
     def skip_new_lines():
         while isinstance(it.peak(), TokenNewLine):
             if it.is_empty():
@@ -243,7 +247,7 @@ def parse_tuple_like(it: PeakableTokenIterator, token: TokenBracket, parent: Opt
     match it.peak():
         case TokenBracket(open=False, type=token.type):
             it.next()
-            return ASTNodeTupleLike(token, nodes, parent)
+            return []
         case _:
             pass
     while True:
@@ -267,4 +271,4 @@ def parse_tuple_like(it: PeakableTokenIterator, token: TokenBracket, parent: Opt
                     raise ParserError.from_type(ParserErrorType.UNEXPECTED_TUPLE_TERMINATOR, tok.location)
         else:
             raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, token.location)
-    return ASTNodeTupleLike(token, nodes, parent)
+    return nodes

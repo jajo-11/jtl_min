@@ -2,6 +2,6 @@ var i = 0
 const length = 10
 
 while i < length {
-    printf("%d", i)
+    // printf("%d", i)
     i = i + 1
 }

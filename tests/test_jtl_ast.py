@@ -110,7 +110,7 @@ class TestParser(unittest.TestCase):
                           "print(\"hi\")\n"
                           "}\n")
         expected_result = "\n".join([
-            "(const (= fn (proc (() None []) None",
+            "(const (= fn (proc [] None",
             " body:",
             "   #(() print [\"hi\"])",
             ")))"
@@ -124,7 +124,7 @@ class TestParser(unittest.TestCase):
                           "    return malloc(a * size_of(int))\n"
                           "}\n")
         expected_result = "\n".join([
-            "(const (= fn (proc (() None [(: a int)]) (<- ^ int)",
+            "(const (= fn (proc [(: a int)] (<- ^ int)",
             " body:",
             "   #(return (() malloc [(* a (() size_of [int]))]))",
             ")))"
@@ -137,7 +137,7 @@ class TestParser(unittest.TestCase):
         tokens = lex_file("test_file",
                           "const vec3 = record(x, y, z: float)")
         expected_result = \
-            "(const (= vec3 (() TokenKeyword(location=test_file:1:14, keyword=record) [x y (: z float)])))"
+            "(const (= vec3 (record None [x y (: z float)])))"
 
         result = str(parse_tokens(tokens)[0])
         self.assertEqual(expected_result, result)
