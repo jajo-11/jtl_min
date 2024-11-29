@@ -27,7 +27,7 @@ class TypeInfo:
     size: Optional[int]
     group: TypeGroup
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.name
 
 
@@ -64,7 +64,7 @@ class TypeType(Enum):
     PROCEDURE = TypeInfo("procedure", None, TypeGroup.PROCEDURE)
     RETURNS = TypeInfo("returns", None, TypeGroup.RETURNS)
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.name
 
 
@@ -96,23 +96,27 @@ class Mutability(Enum):
     MUTABLE = "var"
 
 
-if TYPE_CHECKING:
-    from ir import VirtualRegister, Immediate
-
 @dataclass(slots=True)
 class Name:
+    id: int
     name: str
     declaration_location: CodeLocation
     type: int
     type_table: "TypeTable"
     mut: Mutability = Mutability.ONCE
-    # used in ir generation as the current value or name of register holding the value
-    name_iteration: "VirtualRegister" | "Immediate" | None = None
 
-
-    def __repr__(self):
+    def __str__(self):
         return (f"{self.mut.value} {self.name}: {self.type_table.get(self.type)}"
                 f" @ {self.declaration_location}")
+
+    def __hash__(self):
+        return self.id
+
+    def __eq__(self, other):
+        if isinstance(other, Name):
+            return self.id == other.id
+        else:
+            return False
 
 
 class Record:
@@ -126,7 +130,7 @@ class Record:
         # self.size = sum(map(lambda f: self.type_table.get(f.type).info.size, self.fields))
         self.size = 0
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.name.name
 
 
@@ -136,7 +140,7 @@ class Type:
     def __init__(self, info: TypeType = TypeType.UNDEFINED) -> None:
         self.info = copy(info.value)
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.info.name
 
     def __eq__(self, other: Any) -> bool:
@@ -173,7 +177,7 @@ class TypeRecord(Type):
         self.record: Record = record
         self.info.size = record.size
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return str(self.record.name)
 
     def __eq__(self, other: Any) -> bool:
@@ -190,13 +194,14 @@ class TypePointer(Type):
         self.type_table = type_table
         self.target_type = target_type
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return f"^({self.type_table.get(self.target_type)})"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, TypePointer):
             return False
         return self.type_table.get(self.target_type) == self.type_table.get(other.target_type)
+
 
 class TypeProcedure(Type):
     __slots__ = ("info", "arguments", "return_type", "type_table")
@@ -207,7 +212,7 @@ class TypeProcedure(Type):
         self.return_type = return_type
         self.type_table = type_table
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return (f"procedure ({', '.join(map(str, map(self.type_table.get, self.arguments)))})"
                 f" -> {self.type_table.get(self.return_type)}")
 

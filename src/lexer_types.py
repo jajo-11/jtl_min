@@ -16,7 +16,7 @@ class CodeLocation:
         # ast nodes to determine the full extend of a node
         return CodeLocation(self.file_name, self.line, 0, len(self.line_str), self.line_str)
 
-    def __repr__(self):
+    def __str__(self):
         return f"{self.file_name}:{self.line + 1}:{self.col + 1}"
 
 
@@ -70,7 +70,7 @@ class Keyword(Enum):
     DISTINCT = "distinct"
     DEFER = "defer"
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.value
 
 
@@ -99,7 +99,7 @@ class BuildInType(Enum):
     F64 = "f64"
     TYPE = "type"
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.value
 
 
@@ -135,7 +135,7 @@ class Operator(Enum):
     ADDRESS_OFF = "&"
     POINTER = "^"
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return self.value
 
 
@@ -150,9 +150,6 @@ class BracketType(Enum):
     CURLY = "{}"
 
     def __str__(self) -> str:
-        return self.__repr__()
-
-    def __repr__(self) -> str:
         return self.value
 
 
