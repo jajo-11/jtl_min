@@ -93,7 +93,10 @@ class ElaborationErrorType(Enum):
     CAN_NOT_RETURN_FROM_HERE = ("Unexpected Statement", "Can only return from procedures")
     UNREACHABLE = ("Unreachable Expression", "Procedure returns before this can be executed")
     WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, expected {}")
+    WRONG_NUMBER_OF_ARGUMENTS_CAST = ("Procedure signature missmatch", "cast expects exactly 2 arguments, got {}")
     WRONG_ARGUMENT_TYPE = ("Procedure signature missmatch", "Expected argument {} to have type {} got {}")
+    GLOBAL_CALL = ("Unexpected call", "Can not call functions in the global scope")
+    CASTING_ERROR = ("Casting error", "Can not cast objecto of type {} to type {}")
 
 
 @dataclass

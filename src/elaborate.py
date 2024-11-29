@@ -7,12 +7,12 @@ from errors import ElaborationError, ElaborationErrorType, JTLTypeError, JTLType
 
 
 def elaborate_module(nodes: List[ASTNode]) -> Scope:
-    scope = Scope(None, {}, [], TypeTable())
+    scope = Scope(TypeTable())
     elaborate_scope(scope, nodes, None)
 
     # take literal types whose types could not be inferred and convert them to discrete types
     for i, t in enumerate(scope.type_table.table):
-        if i == 0: # skip sentinel
+        if i == 0:  # skip sentinel
             continue
         if isinstance(t, Type) and t.info.size is None:
             match t.info.group:
@@ -48,7 +48,7 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
             raise ElaborationError.from_type(ElaborationErrorType.UNREACHABLE, nodes[-1].token.location.whole_line())
 
     for proc in parent.delayed_elaborate:
-        proc.elaborated_body = Scope(parent, {}, [], parent.type_table)
+        proc.elaborated_body = Scope(parent)
         for n in proc.argument_names:
             proc.elaborated_body.names[n.name] = n
         elaborate_scope(proc.elaborated_body, proc.body, proc)
@@ -79,6 +79,7 @@ def elaborate_statement(parent: Scope, node: ASTNode, returnable: Optional[ASTNo
             expr = elaborate_expression(parent, node, False, returnable)
     parent.nodes.append(expr)
 
+
 def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnable: Optional[ASTNodeProcedure]
                           ) -> ASTNodeAssignment:
     # returnable is always unused as it returns nothing and therefore can not be assigned, but I prefer getting a
@@ -105,11 +106,13 @@ def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnab
 def elaborate_name_and_type(parent: Scope, node: ASTNode) -> Name:
     if isinstance(node, ASTNodeBinary) and node.token.op == Operator.COLON:
         if not (isinstance(node.left, ASTNodeValue) and isinstance(node.left.token, TokenName)):
-            raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION, node.token.location.whole_line())
-        return Name(node.left.token.name, node.token.location.whole_line(), elaborate_type(parent, node.right),
-                    parent.type_table)
+            raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
+                                             node.token.location.whole_line())
+        return Name(parent.name_index.next(), node.left.token.name, node.token.location.whole_line(),
+                    elaborate_type(parent, node.right), parent.type_table)
     elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenName):
-        return Name(node.token.name, node.token.location.whole_line(), parent.type_table.new(Type()), parent.type_table)
+        return Name(parent.name_index.next(), node.token.name, node.token.location.whole_line(),
+                    parent.type_table.new(Type()), parent.type_table)
     else:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION, node.token.location.whole_line())
 
@@ -362,7 +365,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             if condition_type.info.group != TypeGroup.BOOL:
                 raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_BOOLEAN_CONDITION, node.condition.token.location,
                                              condition_type)
-            node.elaborated_body = Scope(parent, {}, [], parent.type_table)
+            node.elaborated_body = Scope(parent)
             elaborate_scope(node.elaborated_body, node.body, returnable)
             node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
             return node
@@ -396,7 +399,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             return node
         case ASTNodeScope():
             # TODO maybe scopes can return something
-            node.elaborated_body = Scope(parent, {}, [], parent.type_table)
+            node.elaborated_body = Scope(parent)
             elaborate_scope(node.elaborated_body, node.nodes, returnable)
             if (len(node.elaborated_body.nodes) > 0
                     and parent.type_table.get(node.elaborated_body.nodes[-1].type).info.group == TypeGroup.RETURNS):
@@ -434,13 +437,33 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                          i+1,
                                                          parent.type_table.get(t),
                                                          parent.type_table.get(elab.type))
+                if parent.parent is None:
+                    raise ElaborationError.from_type(ElaborationErrorType.GLOBAL_CALL, node.token.location.whole_line())
                 call = ASTNodeCall(node.parent.token, proc_name, call_arguments)
 
                 call.type = proc_type.return_type
                 return call
             else:
-                # TODO Casts, Tuples, Arrays, Records, (Dicts?)
-                raise NotImplementedError()
+                match node.token:
+                    case TokenKeyword(keyword=Keyword.CAST):
+                        # TODO allow reinterpret argument? (or just add a reinterpret_cast keyword)
+                        if len(node.children) != 2:
+                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
+                                                             node.token.location.whole_line(), len(node.children))
+                        target_type = elaborate_type(parent, node.children[0])
+                        source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
+                        if can_cast(parent.type_table, target_type, source_expr.type):
+                            rv = ASTNodeCast(node.token, source_expr)
+                            rv.type = target_type
+                            return rv
+                        else:
+                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE,
+                                                             node.token.location.whole_line(),
+                                                             parent.type_table.get(source_expr.type),
+                                                             parent.type_table.get(target_type))
+                    case _:
+                        # TODO Casts, Tuples, Arrays, Records, (Dicts?)
+                        raise NotImplementedError()
         case _:
             raise RuntimeError(f"Bad ast node in expression {node}")
     raise RuntimeError("This is here so mypy is happy")
@@ -555,3 +578,16 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
         raise JTLTypeError.from_type(JTLTypeErrorType.UNSAFE_AUTOMATIC_CAST, a.token.location.whole_line(), at, bt)
 
     raise JTLTypeError.from_type(JTLTypeErrorType.INCOMPATIBLE_TYPE_GROUP, a.token.location.whole_line(), at, bt)
+
+castable_type_groups = {
+    TypeGroup.INT,
+    TypeGroup.UINT,
+    TypeGroup.FLOAT,
+    TypeGroup.BOOL,
+    TypeGroup.SYMBOL,
+    TypeGroup.POINTER,
+}
+
+def can_cast(type_table: TypeTable, a: int, b: int) -> bool:
+    at, bt = type_table.get(a), type_table.get(b)
+    return at.info.group in castable_type_groups and bt.info.group in castable_type_groups
