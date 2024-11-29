@@ -1,5 +1,8 @@
-const sum = proc(a: int, b: int): int {
-    return a + b
+const sum = proc(a: int, b: int): f32 {
+    return cast(f32, a + b)
 }
 
-sum(1, 2)
+const main = proc(): int {
+    let factor: i64 = 10
+    return cast(int, sum(1, 2)  * factor)
+}

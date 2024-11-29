@@ -1,7 +1,7 @@
 import sys
 from pprint import pprint
 
-from elaboration_types import Scope
+from ir import IRUnit
 from jtl_ast import parse_tokens
 from errors import simple_error
 from lexer import lex_file
@@ -15,14 +15,18 @@ if __name__ == '__main__':
     with open(sys.argv[1], 'r', encoding="utf-8", errors="strict") as f:
         file_contents = f.read()
 
+    print("Tokenizing...")
     tokens = lex_file(sys.argv[1], file_contents)
+    # pprint(tokens)
 
-    pprint(tokens)
-
+    print("Parsing tokens...")
     ast_nodes = parse_tokens(tokens)
-
     for node in ast_nodes:
         print(node)
 
+    print("Elaborating...")
     global_scope = elaborate_module(ast_nodes)
-    print(global_scope)
+
+    print("Generating IR...")
+    ir = IRUnit(global_scope)
+    print(ir)

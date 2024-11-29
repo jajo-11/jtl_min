@@ -76,9 +76,11 @@ class TestParser(unittest.TestCase):
 
         expected_result = ["(if (<= sum 1)\n"
                            " body:\n"
-                           "   #(() print [sum])\n"
-                           "   #(= sum (* (+ sum 1) sum))\n"
-                           "   ##(= a (* 1 2))\n"
+                           "   Scope:\n"
+                           "     (() print [sum])\n"
+                           "     (= sum (* (+ sum 1) sum))\n"
+                           "     Scope:\n"
+                           "       (= a (* 1 2))\n"
                            " else:\n"
                            "   None\n"
                            ")",
@@ -97,7 +99,7 @@ class TestParser(unittest.TestCase):
         expected_result = "\n".join([
             "(while (< i 10)",
             " body:",
-            "   #(= i (+ i 1))",
+            "   (= i (+ i 1))",
             ")",
         ])
 
@@ -112,7 +114,7 @@ class TestParser(unittest.TestCase):
         expected_result = "\n".join([
             "(const (= fn (proc [] None",
             " body:",
-            "   #(() print [\"hi\"])",
+            "   (() print [\"hi\"])",
             ")))"
         ])
 
@@ -126,7 +128,7 @@ class TestParser(unittest.TestCase):
         expected_result = "\n".join([
             "(const (= fn (proc [(: a int)] (<- ^ int)",
             " body:",
-            "   #(return (() malloc [(* a (() size_of [int]))]))",
+            "   (return (() malloc [(* a (() size_of [int]))]))",
             ")))"
         ])
 
