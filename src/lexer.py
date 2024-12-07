@@ -42,12 +42,16 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 start_col = it.last[0]
         return CodeLocation(file_name, line_nr, start_col, length, line)
 
-    def append_multi_char_op(secondary: str, op_single: Operator, op_double: Operator):
-        if it.peak()[1] == secondary:
-            it.next()
-            tokens.append(TokenOperator(location(2, col_nr), op_double))
+    def append_multi_char_op(secondaries: List[str], operator_none: Operator, operators: List[Operator]):
+        nxt = it.peak()[1]
+        for secondary, operator in zip(secondaries, operators):
+            if nxt == secondary:
+                it.next()
+                tokens.append(TokenOperator(location(2, col_nr), operator))
+                return
         else:
-            tokens.append(TokenOperator(location(), op_single))
+            tokens.append(TokenOperator(location(), operator_none))
+
 
     file_lines = file_contents.splitlines()
 
@@ -56,10 +60,15 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
         return [TokenNewLine(CodeLocation(file_name, 0, 0, 1, ""))]
 
     tokens: List[Token] = []
+    multi_line_comment = False
     for line_nr, line in enumerate(file_lines):
         it = PeakableIterator(enumerate(line), (len(line), "\n"))
         for col_nr, char in it:
-            if ud.category(char) == 'Zs':
+            if multi_line_comment:
+                if char == "*" and it.peak()[1] == "/":
+                    it.next()
+                    multi_line_comment = False
+            elif ud.category(char) == 'Zs':
                 pass
             elif ud.category(char) in {'Ll', 'Lu', 'Lo'} or char == "_":
                 loc = location()
@@ -80,6 +89,8 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                         tokens.append(TokenOperator(loc, Operator.OR))
                     case "not":
                         tokens.append(TokenOperator(loc, Operator.NOT))
+                    case "xor":
+                        tokens.append(TokenOperator(loc, Operator.BITWISE_XOR))
                     case "if":
                         tokens.append(TokenKeyword(loc, Keyword.IF))
                     case "else":
@@ -106,6 +117,8 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                         tokens.append(TokenKeyword(loc, Keyword.IN))
                     case "cast":
                         tokens.append(TokenKeyword(loc, Keyword.CAST))
+                    case "transmute":
+                        tokens.append(TokenKeyword(loc, Keyword.TRANSMUTE))
                     case "distinct":
                         tokens.append(TokenKeyword(loc, Keyword.DISTINCT))
                     case "defer":
@@ -183,7 +196,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
             elif char == "}":
                 tokens.append(TokenBracket(location(), False, BracketType.CURLY))
             elif char == "=":
-                append_multi_char_op("=", Operator.ASSIGNMENT, Operator.EQUAL)
+                append_multi_char_op(["="], Operator.ASSIGNMENT, [Operator.EQUAL])
             elif char == "+":
                 tokens.append(TokenOperator(location(), Operator.PLUS))
             elif char == "-":
@@ -192,6 +205,13 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 tokens.append(TokenOperator(location(), Operator.TIMES))
             elif char == "/":
                 if it.peak()[1] == "/":
+                    break
+                elif it.peak()[1] == "*":
+                    multi_line_comment = True
+                    for _, c in it:
+                        if c == '*' and it.peak()[1] == '/':
+                            it.next()
+                            multi_line_comment = False
                     break
                 else:
                     tokens.append(TokenOperator(location(), Operator.DIVIDE))
@@ -207,23 +227,32 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                     tokens.append(TokenOperator(location(), Operator.DOT))
             elif char == ":":
                 tokens.append(TokenOperator(location(), Operator.COLON))
-            elif char == "&":
+            elif char == "@":
                 tokens.append(TokenOperator(location(), Operator.ADDRESS_OFF))
             elif char == "^":
                 tokens.append(TokenOperator(location(), Operator.POINTER))
             elif char == "<":
-                append_multi_char_op("=", Operator.LESS, Operator.LESSEQUAL)
+                append_multi_char_op(["=", "<"], Operator.LESS,
+                                     [Operator.LESSEQUAL, Operator.SHIFT_LEFT])
             elif char == ">":
-                append_multi_char_op("=", Operator.GREATER, Operator.GREATEREQUAL)
+                append_multi_char_op(["=", ">"], Operator.GREATER,
+                                     [Operator.GREATEREQUAL, Operator.SHIFT_RIGHT])
             elif char == "!":
                 if it.peak()[1] == "=":
                     it.next()
                     tokens.append(TokenOperator(location(2, col_nr), Operator.NOTEQUAL))
                 else:
                     raise LexerError.from_type(LexerErrorType.UNIMPLEMENTED, location())
+            elif char == "|":
+                tokens.append(TokenOperator(location(), Operator.BITWISE_OR))
+            elif char == "&":
+                tokens.append(TokenOperator(location(), Operator.BITWISE_AND))
+            elif char == "~":
+                tokens.append(TokenOperator(location(), Operator.BITWISE_NOT))
             else:
                 raise LexerError.from_type(LexerErrorType.INVALID, location())
-        tokens.append(TokenNewLine(location(start_col=len(line))))
+        if not multi_line_comment:
+            tokens.append(TokenNewLine(location(start_col=len(line))))
     return tokens
 
 
