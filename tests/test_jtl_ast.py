@@ -15,11 +15,11 @@ class TestParser(unittest.TestCase):
         self.assertEqual(str(exprs[0]), "(= (: sum int) (* (* 3 (+ 1 2)) (<- - 2)))")
 
     def test_pointers(self):
-        tokens = lex_file("test_file", "let sum_ptr: ^int = &1\n"
+        tokens = lex_file("test_file", "let sum_ptr: ^int = @1\n"
                                        "let sum: int = sum_ptr^")
         exprs = parse_tokens(tokens)
         self.assertEqual(2, len(exprs))
-        self.assertEqual(str(exprs[0]), "(let (= (: sum_ptr (<- ^ int)) (<- & 1)))")
+        self.assertEqual(str(exprs[0]), "(let (= (: sum_ptr (<- ^ int)) (<- @ 1)))")
         self.assertEqual(str(exprs[1]), "(let (= (: sum int) (-> ^ sum_ptr)))")
 
     def test_tuple_like(self):

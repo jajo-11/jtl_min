@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import List, Dict, Tuple, Optional
 
 from ast_types import ASTNode, ASTNodeStatement, ASTNodeBinary, ASTNodeAssignment, ASTNodeUnary, ASTNodeValue, \
-    ASTNodeScope, ASTNodeCall, ASTNodeIf, ASTNodeWhile, ASTNodeProcedure
+    ASTNodeScope, ASTNodeCall, ASTNodeIf, ASTNodeWhile, ASTNodeProcedure, ASTNodeCast, ASTNodeTransmute
 from elaboration_types import Scope
 from lexer_types import CodeLocation, TokenKeyword, Keyword, TokenOperator, Operator, TokenNumberLiteral, TokenName, \
     TokenStringLiteral, TokenBoolLiteral
@@ -59,63 +58,87 @@ class IRInstruction:
 
 
 @dataclass
-class IRInstArithmetic(IRInstruction):
+class IRInstBinary(IRInstruction):
     dest: VirtualRegister
     op1: VirtualRegister | Immediate
     op2: VirtualRegister | Immediate
 
 
-class IRInstAdd(IRInstArithmetic):
+class IRInstAdd(IRInstBinary):
     def __str__(self) -> str:
         return f"add {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstSub(IRInstArithmetic):
+class IRInstSub(IRInstBinary):
     def __str__(self) -> str:
         return f"subtract {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstMul(IRInstArithmetic):
+class IRInstMul(IRInstBinary):
     def __str__(self) -> str:
         return f"multiply {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstDiv(IRInstArithmetic):
+class IRInstDiv(IRInstBinary):
     def __str__(self) -> str:
         return f"divide {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstRem(IRInstArithmetic):
+class IRInstRem(IRInstBinary):
     def __str__(self) -> str:
         return f"remainder {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstAnd(IRInstArithmetic):
+class IRInstAndLogical(IRInstBinary):
     def __str__(self) -> str:
-        return f"and {self.op1} {self.op2} -> {self.dest}"
+        return f"and_logical {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstOr(IRInstArithmetic):
+class IRInstAndBitwise(IRInstBinary):
     def __str__(self) -> str:
-        return f"or {self.op1} {self.op2} -> {self.dest}"
+        return f"and_bitwise {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstEqual(IRInstArithmetic):
+class IRInstOrLogical(IRInstBinary):
+    def __str__(self) -> str:
+        return f"or_logical {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstOrBitwise(IRInstBinary):
+    def __str__(self) -> str:
+        return f"or_bitwise {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstEqual(IRInstBinary):
     def __str__(self) -> str:
         return f"equal {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstNotEqual(IRInstArithmetic):
+class IRInstNotEqual(IRInstBinary):
     def __str__(self) -> str:
         return f"not_equal {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstLessEqual(IRInstArithmetic):
+class IRInstLessEqual(IRInstBinary):
     def __str__(self) -> str:
         return f"less_equal {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstGreaterEqual(IRInstArithmetic):
+class IRInstGreaterEqual(IRInstBinary):
     def __str__(self) -> str:
         return f"greater_equal {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstLess(IRInstArithmetic):
+class IRInstLess(IRInstBinary):
     def __str__(self) -> str:
         return f"less {self.op1} {self.op2} -> {self.dest}"
 
-class IRInstGreater(IRInstArithmetic):
+class IRInstGreater(IRInstBinary):
     def __str__(self) -> str:
         return f"greater {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstShiftRightLogical(IRInstBinary):
+    def __str__(self) -> str:
+        return f"shift_right_logical {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstShiftLeftLogical(IRInstBinary):
+    def __str__(self) -> str:
+        return f"shift_left_logical {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstShiftRightArithmetic(IRInstBinary):
+    def __str__(self) -> str:
+        return f"shift_right_arithmetic {self.op1} {self.op2} -> {self.dest}"
+
+class IRInstXor(IRInstBinary):
+    def __str__(self) -> str:
+        return f"xor {self.op1} {self.op2} -> {self.dest}"
 
 @dataclass
 class IRInstPhi(IRInstruction):
@@ -128,6 +151,7 @@ class IRInstPhi(IRInstruction):
     def __str__(self) -> str:
         return f"phi @{self.block1.name} {self.src1} @{self.block2.name} {self.src2} -> {self.dest}"
 
+
 @dataclass
 class IRInstrUnary(IRInstruction):
     dest: VirtualRegister
@@ -138,6 +162,21 @@ class IRInstNeg(IRInstrUnary):
     def __str__(self) -> str:
         return f"neg {self.op1} -> {self.dest}"
 
+class IRInstNotLogical(IRInstrUnary):
+    def __str__(self) -> str:
+        return f"not_logical {self.op1} -> {self.dest}"
+
+class IRInstNotBitwise(IRInstrUnary):
+    def __str__(self) -> str:
+        return f"not_bitwise {self.op1} -> {self.dest}"
+
+class IRInstCast(IRInstrUnary):
+    def __str__(self) -> str:
+        return f"cast {self.op1} -> {self.dest}"
+
+class IRInstMove(IRInstrUnary):
+    def __str__(self) -> str:
+        return f"move {self.op1} -> {self.dest}"
 
 @dataclass
 class IRInstAssign(IRInstruction):
@@ -232,8 +271,8 @@ class IRProcedure:
         return out + "\n".join(map(str, self.blocks))
 
 binary_op_to_inst = {
-    Operator.AND: IRInstAnd,
-    Operator.OR: IRInstOr,
+    Operator.AND: IRInstAndLogical,
+    Operator.OR: IRInstOrLogical,
     Operator.DIVIDE: IRInstDiv,
     Operator.MODULO: IRInstRem,
     Operator.TIMES: IRInstMul,
@@ -245,6 +284,17 @@ binary_op_to_inst = {
     Operator.NOTEQUAL: IRInstNotEqual,
     Operator.PLUS: IRInstAdd,
     Operator.MINUS: IRInstSub,
+    Operator.SHIFT_LEFT: IRInstShiftLeftLogical,
+    Operator.SHIFT_RIGHT: IRInstShiftRightLogical,
+    Operator.BITWISE_OR: IRInstOrBitwise,
+    Operator.BITWISE_AND: IRInstAndBitwise,
+    Operator.BITWISE_XOR: IRInstXor,
+}
+
+unary_op_to_inst = {
+    Operator.MINUS: IRInstNeg,
+    Operator.NOT: IRInstNotLogical,
+    Operator.BITWISE_NOT: IRInstNotBitwise,
 }
 
 class IRUnit:
@@ -327,12 +377,13 @@ class IRUnit:
                 match expr.token:
                     case TokenOperator(op=Operator.PLUS):
                         return self.parse_expr(name, expr.child, scope, blocks)
-                    case TokenOperator(op=Operator.MINUS):
+                    case TokenOperator(_, op) if op in unary_op_to_inst.keys():
                         rv = self.parse_expr(name, expr.child, scope, blocks)
                         assert not isinstance(rv, IRProcedure)
                         if rv is not None:
+                            cls = unary_op_to_inst[op]
                             dest = self.new_temporary(name, expr.type)
-                            blocks[-1].instructions.append(IRInstNeg(expr.token.location, dest, rv))
+                            blocks[-1].instructions.append(cls(expr.token.location, dest, rv))
                             return dest
                         else:
                             raise RuntimeError(f'Compiler Error: unary operator must operate on something')
@@ -347,6 +398,8 @@ class IRUnit:
                 assert not isinstance(op2, IRProcedure)
                 dest = self.new_temporary(name, expr.type)
                 if instr := binary_op_to_inst.get(expr.token.op):
+                    if instr == IRInstShiftRightLogical and isinstance(op1.type, IRTypeUInt):
+                        instr = IRInstShiftRightArithmetic
                     blocks[-1].instructions.append(instr(expr.token.location, dest, op1, op2))
                 else:
                     raise NotImplementedError()
@@ -455,6 +508,20 @@ class IRUnit:
                 for local_expr in expr.elaborated_body.nodes:
                     self.parse_expr("", local_expr, expr.elaborated_body, block_list)
                 return IRProcedure(f"proc{self.n_proc}_{name}", block_list, return_register, arguments)
+            case ASTNodeCast():
+                op1 = self.parse_expr(name, expr.node, scope, blocks)
+                assert op1 is not None
+                assert not isinstance(op1, IRProcedure)
+                cast_result = self.new_temporary(name, expr.type)
+                blocks[-1].instructions.append(IRInstCast(expr.token.location, cast_result, op1))
+                return cast_result
+            case ASTNodeTransmute():
+                op1 = self.parse_expr(name, expr.node, scope, blocks)
+                assert op1 is not None
+                assert not isinstance(op1, IRProcedure)
+                transmute_result = self.new_temporary(name, expr.type)
+                blocks[-1].instructions.append(IRInstMove(expr.token.location, transmute_result, op1))
+                return transmute_result
             case _:
                 raise NotImplementedError()
         assert False, "Sentinel"

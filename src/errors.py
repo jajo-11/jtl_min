@@ -94,6 +94,8 @@ class ElaborationErrorType(Enum):
     UNREACHABLE = ("Unreachable Expression", "Procedure returns before this can be executed")
     WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, expected {}")
     WRONG_NUMBER_OF_ARGUMENTS_CAST = ("Procedure signature missmatch", "cast expects exactly 2 arguments, got {}")
+    WRONG_NUMBER_OF_ARGUMENTS_TRANSMUTE = ("Procedure signature missmatch",
+                                           "transmute expects exactly 2 arguments, got {}")
     WRONG_ARGUMENT_TYPE = ("Procedure signature missmatch", "Expected argument {} to have type {} got {}")
     GLOBAL_CALL = ("Unexpected call", "Can not call functions in the global scope")
     CASTING_ERROR = ("Casting error", "Can not cast objecto of type {} to type {}")
@@ -129,6 +131,15 @@ class JTLTypeErrorType(Enum):
     DEREFERENCE_VALUE = ("Incompatible type", "Can not dereference value")
     EXPECTED_BOOLEAN_CONDITION = ("Unexpected type", "Condition must return/be a boolean value not {}")
     TYPE_MISSMATCH_RETURN = ("Type Error", "Returned value of type {}, expected a value of {}")
+    BIT_OPERATOR_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
+                                                 " transmute floats if necessary")
+    BIT_OPERATOR_SIZE_MISSMATCH = ("Type Error", "Both operands must have the same size in bits")
+    BIT_OPERATOR_SIGNED_UNSIGNED = ("Type Error", "Both operands must be either signed or unsigned")
+    SHIFT_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
+                                                 " transmute floats if necessary")
+    TRANSMUTE_UNRESOLVED_SIZE = ("Missing Type", "To transmute the size of the source type must be known."
+                                       " (It is currently not enough that the type can be inferred later)")
+    TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")
 
 
 @dataclass

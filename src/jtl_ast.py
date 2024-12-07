@@ -89,8 +89,9 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
     match lhs_token := it.next():
         case TokenNumberLiteral() | TokenName() | TokenStringLiteral() | TokenBoolLiteral() | TokenBuildInType():
             lhs = ASTNodeValue(lhs_token)
-        case(TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
-             | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)):
+        case (TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
+              | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)
+              | TokenOperator(op=Operator.NOT) | TokenOperator(op=Operator.BITWISE_NOT)):
             bp_right = UnaryBindingPower[lhs_token.op]
             rhs = parse_expr(it, bp_right, ignore_new_line)
             if rhs is None:
@@ -138,7 +139,8 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, curly_bracket.location)
             lhs = ASTNodeWhile(lhs_token, condition, nodes)
-        case TokenKeyword(keyword=Keyword.RECORD) | TokenKeyword(keyword=Keyword.CAST):
+        case (TokenKeyword(keyword=Keyword.RECORD) | TokenKeyword(keyword=Keyword.CAST)
+              | TokenKeyword(keyword=Keyword.TRANSMUTE)):
             match bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
                     it.next()

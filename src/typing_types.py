@@ -30,6 +30,11 @@ class TypeInfo:
     def __str__(self) -> str:
         return self.name
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, TypeInfo):
+            return False
+        return self.size == other.size and self.group == other.group
+
 
 PLATFORM_POINTER_SIZE = 8
 PLATFORM_INT_SIZE = 4

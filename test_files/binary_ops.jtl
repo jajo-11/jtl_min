@@ -1,0 +1,39 @@
+const main = proc(): int {
+    const a: u32 = 2
+    let a2 = a >> 1 // arithmetic shift
+    let a3 = a2 | a
+    let a4 = a3 & 2
+    let b: i32 = -1
+    let b1 = b >> 1
+    let c = a4 xor transmute(u32, b1)
+    return cast(i32, ~c)
+}
+
+/*
+>>>
+procedure proc1_main () -> i32:
+proc1_main_body:
+  assign <u32>2 -> <u32>$v1_a
+  shift_right_arithmetic <u32>$v1_a <i64>1 -> <u32>%t1_a2
+  assign <u32>%t1_a2 -> <u32>$v2_a2
+  or_bitwise <u32>$v2_a2 <u32>$v1_a -> <u32>%t2_a3
+  assign <u32>%t2_a3 -> <u32>$v3_a3
+  and_bitwise <u32>$v3_a3 <u32>2 -> <u32>%t3_a4
+  assign <u32>%t3_a4 -> <u32>$v4_a4
+  neg <i32>1 -> <i32>%t4_b
+  assign <i32>%t4_b -> <i32>$v5_b
+  shift_right_logical <i32>$v5_b <i64>1 -> <i32>%t5_b1
+  assign <i32>%t5_b1 -> <i32>$v6_b1
+  move <i32>$v6_b1 -> <u32>%t6_c
+  xor <u32>$v4_a4 <u32>%t6_c -> <u32>%t7_c
+  assign <u32>%t7_c -> <u32>$v7_c
+  not_bitwise <u32>$v7_c -> <u32>%t8_return
+  cast <u32>%t8_return -> <i32>%t9_return
+  return <i32>%t9_return
+
+
+global_block:
+
+main: Found
+<<<
+*/

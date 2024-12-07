@@ -187,6 +187,17 @@ class ASTNodeCast(ASTNode):
 
 
 @dataclass(slots=True)
+class ASTNodeTransmute(ASTNode):
+    node: ASTNode
+
+    def __repr__(self):
+        return f"{type(self).__name__}<{str(self)}>"
+
+    def __str__(self) -> str:
+        return f"(transmute {self.type} {self.node})"
+
+
+@dataclass(slots=True)
 class ASTNodeAssignment(ASTNode):
     node: ASTNodeBinary
     name: Name
@@ -217,26 +228,32 @@ OperatorBindingPower = {
     Operator.COLON:        (2.0, 2.5),
     Operator.AND:          (2.0, 2.5),
     Operator.OR:           (2.0, 2.5),
-    Operator.EQUAL:        (3.0, 3.5),
-    Operator.NOTEQUAL:     (3.0, 3.5),
-    Operator.LESSEQUAL:    (3.0, 3.5),
-    Operator.GREATEREQUAL: (3.0, 3.5),
-    Operator.GREATER:      (3.0, 3.5),
-    Operator.LESS:         (3.0, 3.5),
-    Operator.PLUS:         (4.0, 4.5),
-    Operator.MINUS:        (4.0, 4.5),
-    Operator.TIMES:        (5.0, 5.5),
-    Operator.DIVIDE:       (5.0, 5.5),
-    Operator.MODULO:       (5.0, 5.5),
-    Operator.DOT:          (9.0, 9.5),
+    Operator.BITWISE_XOR:  (3.0, 3.5),
+    Operator.BITWISE_AND:  (3.0, 3.5),
+    Operator.BITWISE_OR:   (3.0, 3.5),
+    Operator.EQUAL:        (4.0, 4.5),
+    Operator.NOTEQUAL:     (4.0, 4.5),
+    Operator.LESSEQUAL:    (4.0, 4.5),
+    Operator.GREATEREQUAL: (4.0, 4.5),
+    Operator.GREATER:      (4.0, 4.5),
+    Operator.LESS:         (4.0, 4.5),
+    Operator.SHIFT_RIGHT:  (5.0, 5.5),
+    Operator.SHIFT_LEFT:   (5.0, 5.5),
+    Operator.PLUS:         (6.0, 6.5),
+    Operator.MINUS:        (6.0, 6.5),
+    Operator.TIMES:        (7.0, 7.5),
+    Operator.DIVIDE:       (7.0, 7.5),
+    Operator.MODULO:       (7.0, 7.5),
+    Operator.DOT:          (11.0, 11.5),
 }
 
 UnaryBindingPower = {
-    Operator.PLUS: 6.0,
-    Operator.MINUS: 6.0,
-    Operator.NOT: 6.0,
-    Operator.POINTER: 7.0,
-    Operator.ADDRESS_OFF: 7.0,
+    Operator.PLUS: 8.0,
+    Operator.MINUS: 8.0,
+    Operator.NOT: 8.0,
+    Operator.BITWISE_NOT: 8.0,
+    Operator.POINTER: 9.0,
+    Operator.ADDRESS_OFF: 9.0,
 }
 
-CallBindingPower = 8.0
+CallBindingPower = 10.0

@@ -143,6 +143,9 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
 def is_numeric(type: Type) -> bool:
     return type.info.group in (TypeGroup.INT, TypeGroup.FLOAT, TypeGroup.UINT)
 
+def is_integer(type: Type) -> bool:
+    return type.info.group in (TypeGroup.INT, TypeGroup.UINT)
+
 
 def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                          returnable: Optional[ASTNodeProcedure]) -> ASTNode:
@@ -150,48 +153,67 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
         case ASTNodeBinary():
             node.left = elaborate_expression(parent, node.left, constant, returnable)
             node.right = elaborate_expression(parent, node.right, constant, returnable)
+            lt = parent.type_table.get(node.left.type)
+            rt = parent.type_table.get(node.right.type)
             match node.token.op:
                 case Operator.PLUS | Operator.MINUS | Operator.TIMES | Operator.DIVIDE | Operator.MODULO:
-                    if isinstance(node.left.type, TypePointer) or isinstance(node.right.type, TypeType):
+                    if isinstance(lt, TypePointer) or isinstance(rt, TypeType):
                         raise JTLTypeError.from_type(JTLTypeErrorType.POINTER_ARITHMETIC,
                                                      node.token.location.whole_line(), node.token.op)
-                    for e in (node.left, node.right):
-                        if not is_numeric(parent.type_table.get(e.type)):
-                            raise JTLTypeError.from_type(JTLTypeErrorType.NOT_NUMERIC, e.token.location.whole_line())
-
+                    for e, et in ((node.left, lt), (node.right, rt)):
+                        if not is_numeric(et):
+                            raise JTLTypeError.from_type(JTLTypeErrorType.NOT_NUMERIC,
+                                                         e.token.location.whole_line())
                     node.left, node.right = promote_either(parent.type_table, node.left, node.right)
                     node.type = node.left.type
                     return node
+                case Operator.BITWISE_XOR | Operator.BITWISE_AND | Operator.BITWISE_XOR | Operator.BITWISE_OR:
+                    if not (is_integer(lt) and is_integer(rt)):
+                        raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_ON_NON_INTEGER,
+                                                     node.token.location.whole_line(), str(node.token.op))
+                    if lt.info.size is None:
+                        parent.type_table.overwrite(node.left.type, node.right.type)
+                        lt = rt
+                    elif rt.info.size is None:
+                        parent.type_table.overwrite(node.right.type, node.left.type)
+                        rt = lt
+                    if lt.info.size != rt.info.size:
+                        raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_SIZE_MISSMATCH,
+                                                     node.token.location.whole_line())
+                    if lt.info.group != rt.info.group:
+                        raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_SIGNED_UNSIGNED,
+                                                     node.token.location.whole_line())
+                    node.type = node.left.type
+                    return node
+                case Operator.SHIFT_LEFT | Operator.SHIFT_RIGHT:
+                    if not (is_integer(lt) and is_integer(rt)):
+                        raise JTLTypeError.from_type(JTLTypeErrorType.SHIFT_ON_NON_INTEGER,
+                                                     node.token.location.whole_line(), str(node.token.op))
+                    node.type = lt
+                    return node
                 case Operator.EQUAL | Operator.NOTEQUAL:
                     node.type = parent.type_table.new(Type(TypeType.BOOL))
-                    if is_numeric(parent.type_table.get(node.left.type)):
-                        if not is_numeric(parent.type_table.get(node.right.type)):
-                            raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE,
-                                                         node.left.token.location.whole_line(),
-                                                         parent.type_table.get(node.left.type),
-                                                         parent.type_table.get(node.right.type))
+                    if is_numeric(lt) and is_numeric(rt):
                         node.left, node.right = promote_either(parent.type_table, node.left, node.right)
                         return node
-                    at, bt = parent.type_table.get(node.left.type), parent.type_table.get(node.right.type)
-                    if at.info.group != bt.info.group:
+                    if lt.info.group != rt.info.group:
                         raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE,
                                                      node.left.token.location.whole_line(),
-                                                     at, bt)
-                    if at.info.group in {TypeGroup.BOOL, TypeGroup.SYMBOL}:
+                                                     lt, rt)
+                    if lt.info.group in {TypeGroup.BOOL, TypeGroup.SYMBOL}:
                         return node
-                    if isinstance(at, TypePointer) and isinstance(bt, TypePointer):
-                        if at == bt:
+                    if isinstance(lt, TypePointer) and isinstance(rt, TypePointer):
+                        if lt == rt:
                             return node
                         else:
                             raise JTLTypeError.from_type(JTLTypeErrorType.POINTER_ARITHMETIC,
                                                          node.left.token.location.whole_line(),
-                                                         at.target_type, bt.target_type)
-
-                    if isinstance(at, TypeRecord) and isinstance(bt, TypeRecord) and at == bt:
-                        return node
-
+                                                         lt.target_type, rt.target_type)
+                    if lt.info.group in {TypeGroup.COMPOUND, TypeGroup.POINTER, TypeGroup.TYPE}:
+                        # TODO compound aka strings, types, procedures
+                        raise NotImplementedError()
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.token.location.whole_line(),
-                                                 at, bt)
+                                                 lt, rt)
                 case Operator.LESS | Operator.GREATER | Operator.LESSEQUAL | Operator.GREATEREQUAL:
                     if (is_numeric(parent.type_table.get(node.left.type))
                             and is_numeric(parent.type_table.get(node.right.type))):
@@ -283,6 +305,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     else:
                         raise ElaborationError.from_type(ElaborationErrorType.ADDRESS_OF_UNASSIGNED,
                                                          node.token.location)
+                case Operator.BITWISE_NOT:
+                    ot = parent.type_table.get(operand.type)
+                    if not is_integer(ot):
+                        raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_ON_NON_INTEGER,
+                                                     node.token.location.whole_line(), node.token.op)
+                    node.type = operand.type
+                    return node
                 case _:
                     raise RuntimeError(f"Invalid Unary Operator {node}")
         case ASTNodeUnaryRight():
@@ -461,8 +490,27 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                              node.token.location.whole_line(),
                                                              parent.type_table.get(source_expr.type),
                                                              parent.type_table.get(target_type))
+                    case TokenKeyword(keyword=Keyword.TRANSMUTE):
+                        if len(node.children) != 2:
+                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
+                                                             node.token.location.whole_line(), len(node.children))
+                        target_type = elaborate_type(parent, node.children[0])
+                        source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
+                        source_type = parent.type_table.get(source_expr.type)
+                        # TODO if this is handled better later new checks for all the type groups have to be considered
+                        if source_type.info.size is None:
+                            raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_UNRESOLVED_SIZE,
+                                                             node.token.location.whole_line())
+                        target_type_t = parent.type_table.get(target_type)
+                        if source_type.info.size != target_type_t.info.size:
+                            raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_SIZE_MISSMATCH,
+                                                         node.token.location.whole_line(), target_type_t.info.size,
+                                                         source_type.info.size)
+                        rv_transmute = ASTNodeTransmute(node.token, source_expr)
+                        rv_transmute.type = target_type
+                        return rv_transmute
                     case _:
-                        # TODO Casts, Tuples, Arrays, Records, (Dicts?)
+                        # TODO Tuples, Arrays, Records, (Dicts?)
                         raise NotImplementedError()
         case _:
             raise RuntimeError(f"Bad ast node in expression {node}")

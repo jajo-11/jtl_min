@@ -67,6 +67,7 @@ class Keyword(Enum):
     REFERENCE = "ref"
     IN = "in"
     CAST = "cast"
+    TRANSMUTE = "transmute"
     DISTINCT = "distinct"
     DEFER = "defer"
 
@@ -113,7 +114,6 @@ class TokenBuildInType(Token):
 class TokenComma(Token):
     pass
 
-
 class Operator(Enum):
     PLUS = "+"
     MINUS = "-"
@@ -132,8 +132,14 @@ class Operator(Enum):
     AND = "and"
     OR = "or"
     NOT = "not"
-    ADDRESS_OFF = "&"
+    BITWISE_NOT = "~"
+    ADDRESS_OFF = "@"
     POINTER = "^"
+    BITWISE_OR = "|"
+    BITWISE_AND = "&"
+    BITWISE_XOR = "xor"
+    SHIFT_LEFT = "<<"
+    SHIFT_RIGHT = ">>"
 
     def __str__(self) -> str:
         return self.value

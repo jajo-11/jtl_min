@@ -29,7 +29,7 @@ class TestLexer(unittest.TestCase):
             TokenOperator(location=CodeLocation("test_file", 1, 33, 1, line_str[1]), op=Operator.DOT),
             TokenNewLine(location=CodeLocation("test_file", 1, 34, 1, line_str[1])),
             TokenOperator(location=CodeLocation("test_file", 2, 0, 1, line_str[2]), op=Operator.POINTER),
-            TokenOperator(location=CodeLocation("test_file", 2, 1, 1, line_str[2]), op=Operator.ADDRESS_OFF),
+            TokenOperator(location=CodeLocation("test_file", 2, 1, 1, line_str[2]), op=Operator.BITWISE_AND),
             TokenOperator(location=CodeLocation("test_file", 2, 2, 1, line_str[2]), op=Operator.COLON),
             TokenBoolLiteral(location=CodeLocation("test_file", 2, 3, 4, line_str[2]), value=True),
             TokenBoolLiteral(location=CodeLocation("test_file", 2, 8, 5, line_str[2]), value=False),
