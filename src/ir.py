@@ -457,6 +457,7 @@ class IRUnit:
                 blocks.append(true_block)
                 true_value = self.parse_expr(name, expr.body, scope, blocks)
                 if expr.else_body is not None:
+                    assert expr.else_location is not None
                     final_block = IRBlock(f"if{self.n_ifs}_end")
                     blocks[-1].instructions.append(IRInstJump(expr.else_location, final_block))
                     blocks.append(second_block)

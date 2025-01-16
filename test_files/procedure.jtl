@@ -6,3 +6,27 @@ const main = proc(): int {
     let factor: i64 = 10
     return cast(int, sum(1, 2) * factor)
 }
+
+/*
+>>>
+procedure proc1_sum (<i32>$proc1_sum_arg_a, <i32>$proc1_sum_arg_b) -> f32:
+proc1_sum_body:
+  add <i32>$proc1_sum_arg_a <i32>$proc1_sum_arg_b -> <i32>%t1_return
+  cast <i32>%t1_return -> <f32>%t2_return
+  return <f32>%t2_return
+
+procedure proc2_main () -> i32:
+proc2_main_body:
+  assign <i64>10 -> <i64>$v1_factor
+  call proc1_sum (<i32>1, <i32>2) -> <f32>%t3_return
+  cast <i64>$v1_factor -> <f32>%t4_return
+  multiply <f32>%t3_return <f32>%t4_return -> <f32>%t5_return
+  cast <f32>%t5_return -> <i32>%t6_return
+  return <i32>%t6_return
+
+
+global_block:
+
+main: Found
+<<<
+*/
