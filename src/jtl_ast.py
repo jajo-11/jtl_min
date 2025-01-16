@@ -118,9 +118,9 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                     it.next()
                     if (else_body := parse_expr(it)) is None:
                         raise ParserError.from_type(ParserErrorType.EXPECTED_EXPRESSION, else_token.location)
-                    lhs = ASTNodeIf(lhs_token, condition, body, else_body)
+                    lhs = ASTNodeIf(lhs_token, condition, body, else_token.location, else_body)
                 case TokenNewLine():
-                    lhs = ASTNodeIf(lhs_token, condition, body, None)
+                    lhs = ASTNodeIf(lhs_token, condition, body, None, None)
                 case _:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_END, else_token.location)
         case TokenKeyword(keyword=Keyword.WHILE):

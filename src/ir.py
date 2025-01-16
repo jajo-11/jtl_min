@@ -458,8 +458,7 @@ class IRUnit:
                 true_value = self.parse_expr(name, expr.body, scope, blocks)
                 if expr.else_body is not None:
                     final_block = IRBlock(f"if{self.n_ifs}_end")
-                    # TODO this location on the Jump is currently the if which is not ideal
-                    blocks[-1].instructions.append(IRInstJump(expr.token.location, final_block))
+                    blocks[-1].instructions.append(IRInstJump(expr.else_location, final_block))
                     blocks.append(second_block)
                     false_value = self.parse_expr(name, expr.else_body, scope, blocks)
                     blocks[-1].instructions.append(IRInstJump(expr.token.location, final_block))

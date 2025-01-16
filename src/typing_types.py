@@ -171,7 +171,11 @@ class TypeTable:
     def overwrite(self, old: int, new: int | Type):
         if old == 0:
             raise RuntimeError("Compiler Error tried to alter Sentinel Type")
-        self.table[old] = new
+        current = old
+        while isinstance(next := self.table[current], int):
+            current = next
+        self.table[old] = new # this is not strictly necessary but reduces time to resolve type
+        self.table[current] = new
 
 
 class TypeRecord(Type):

@@ -4,5 +4,5 @@ const sum = proc(a: int, b: int): f32 {
 
 const main = proc(): int {
     let factor: i64 = 10
-    return cast(int, sum(1, 2)  * factor)
+    return cast(int, sum(1, 2) * factor)
 }

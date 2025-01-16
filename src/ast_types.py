@@ -120,6 +120,7 @@ class ASTNodeIf(ASTNode):
     token: TokenKeyword
     condition: ASTNode
     body: ASTNode
+    else_location: Optional[CodeLocation]
     else_body: Optional[ASTNode]
 
     def __repr__(self):

@@ -567,11 +567,12 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
     if at == bt:
         return a, b
 
+    assert at.info.group != TypeGroup.UNDEFINED
+    assert bt.info.group != TypeGroup.UNDEFINED
+
     # try to convert literals to more specific type
-    if narrow_type(type_table, a.type, b.type):
+    if narrow_type(type_table, a.type, b.type) or narrow_type(type_table, b.type, a.type):
         return a, b
-    elif narrow_type(type_table, b.type, a.type):
-        return b, a
 
     assert at.info.size is not None
     assert bt.info.size is not None

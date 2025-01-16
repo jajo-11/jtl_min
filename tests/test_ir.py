@@ -6,7 +6,7 @@ from jtl_ast import parse_tokens
 from lexer import lex_file
 
 def eval_and_get_saved_ir(file_name: str) -> (str, str):
-    with open("../test_files/binary_ops.jtl") as f:
+    with open(file_name) as f:
         src = f.read()
 
     src_lines = src.splitlines()
@@ -31,4 +31,16 @@ def eval_and_get_saved_ir(file_name: str) -> (str, str):
 class TestIr(unittest.TestCase):
     def test_binary_ops(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/binary_ops.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_expression(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/expression.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_expression(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/if.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_expression(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/loop.jtl")
         self.assertEqual(target_ir, ir_striped)
