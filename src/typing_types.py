@@ -5,6 +5,9 @@ from typing import Optional, Dict, List, Iterable, Any, TYPE_CHECKING
 
 from lexer_types import CodeLocation, BuildInType
 
+if TYPE_CHECKING:
+    from ast_types import ASTNode
+
 
 class TypeGroup(Enum):
     UNDEFINED = "undefined"
@@ -100,6 +103,14 @@ class Mutability(Enum):
     ONCE = "let"
     MUTABLE = "var"
 
+@dataclass(slots=True)
+class MemoryLocation:
+    type: int
+    expression: "ASTNode"
+    mut: Mutability = Mutability.MUTABLE
+
+    def __str__(self):
+        return f"Memory Location [{self.expression}]"
 
 @dataclass(slots=True)
 class Name:
@@ -196,12 +207,13 @@ class TypeRecord(Type):
 
 
 class TypePointer(Type):
-    __slots__ = ("info", "target_type", "type_table")
+    __slots__ = ("info", "target_type", "target_mutable", "type_table")
 
-    def __init__(self, target_type: int, type_table: TypeTable) -> None:
+    def __init__(self, target_type: int, target_mutable: bool, type_table: TypeTable) -> None:
         super().__init__(TypeType.POINTER)
         self.type_table = type_table
         self.target_type = target_type
+        self.target_mutable = target_mutable  # a boolean if mutable else false (once and constant)
 
     def __str__(self) -> str:
         return f"^({self.type_table.get(self.target_type)})"

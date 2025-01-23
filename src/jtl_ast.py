@@ -89,6 +89,14 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
     match lhs_token := it.next():
         case TokenNumberLiteral() | TokenName() | TokenStringLiteral() | TokenBoolLiteral() | TokenBuildInType():
             lhs = ASTNodeValue(lhs_token)
+        case TokenOperator(op=Operator.POINTER) if isinstance(nxt := it.peak(), TokenKeyword) and nxt.keyword == Keyword.CONSTANT:
+            it.next()
+            bp_right = UnaryBindingPower[Operator.CONSTANT_POINTER]
+            rhs = parse_expr(it, bp_right, ignore_new_line)
+            if rhs is None:
+                return None
+            # fixme: proper location of the token spanning both the ^ and the cosnt
+            lhs = ASTNodeUnary(TokenOperator(lhs_token.location, op=Operator.CONSTANT_POINTER), rhs)
         case (TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
               | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)
               | TokenOperator(op=Operator.NOT) | TokenOperator(op=Operator.BITWISE_NOT)):
@@ -175,11 +183,11 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                     arguments = parse_tuple_like(it, open_bracket)
                 case _:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_BRACKET, open_bracket.location)
-            match colon := it.peak():
-                case TokenOperator(op=Operator.COLON):
+            match arrow := it.peak():
+                case TokenOperator(op=Operator.ARROW):
                     it.next()
                     if (type_expr := parse_expr(it, 0.0, ignore_new_line)) is None:
-                        raise ParserError.from_type(ParserErrorType.EXPECTED_EXPRESSION, colon.location)
+                        raise ParserError.from_type(ParserErrorType.EXPECTED_EXPRESSION, arrow.location)
                 case _:
                     type_expr = None
             match it.peak():

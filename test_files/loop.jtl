@@ -10,14 +10,17 @@ while i < length {
 >>>
 
 global_block:
-  assign <i32>0 -> <i32>$v1_i
-  assign <i32>10 -> <i32>$v2_length
+  store <i32>0 -> <i32>$v1_i
+  store <i32>10 -> <i32>$v2_length
 while1_head:
-  less <i32>$v1_i <i32>$v2_length -> <u64>%t1_while1_condition
-  jump_not_zero <u64>%t1_while1_condition -> @while1_body | @while1_end
+  load <i32>$v1_i -> <i32>%t1_i
+  load <i32>$v2_length -> <i32>%t2_length
+  less <i32>%t1_i <i32>%t2_length -> <u64>%t3_while1_condition
+  jump_not_zero <u64>%t3_while1_condition -> @while1_body | @while1_end
 while1_body:
-  add <i32>$v1_i <i32>1 -> <i32>%t2_i
-  assign <i32>%t2_i -> <i32>$v1_i
+  load <i32>$v1_i -> <i32>%t4_i
+  add <i32>%t4_i <i32>1 -> <i32>%t5_i
+  store <i32>%t5_i -> <i32>$v1_i
   jump @while1_head
 while1_end:
 

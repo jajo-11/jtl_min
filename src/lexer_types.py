@@ -52,8 +52,8 @@ class TokenStringLiteral(Token):
 
 class Keyword(Enum):
     VARIABLE = "var"
-    LET = "let"
     CONSTANT = "const"
+    LET = "let"
     IF = "if"
     ELSE = "else"
     THEN = "then"
@@ -140,6 +140,8 @@ class Operator(Enum):
     BITWISE_XOR = "xor"
     SHIFT_LEFT = "<<"
     SHIFT_RIGHT = ">>"
+    ARROW = "->"
+    CONSTANT_POINTER = "^ const"
 
     def __str__(self) -> str:
         return self.value

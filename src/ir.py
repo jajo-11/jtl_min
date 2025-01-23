@@ -1,12 +1,14 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
 
+import typing_types
 from ast_types import ASTNode, ASTNodeStatement, ASTNodeBinary, ASTNodeAssignment, ASTNodeUnary, ASTNodeValue, \
-    ASTNodeScope, ASTNodeCall, ASTNodeIf, ASTNodeWhile, ASTNodeProcedure, ASTNodeCast, ASTNodeTransmute
+    ASTNodeScope, ASTNodeCall, ASTNodeIf, ASTNodeWhile, ASTNodeProcedure, ASTNodeCast, ASTNodeTransmute, \
+    ASTNodeUnaryRight
 from elaboration_types import Scope
 from lexer_types import CodeLocation, TokenKeyword, Keyword, TokenOperator, Operator, TokenNumberLiteral, TokenName, \
     TokenStringLiteral, TokenBoolLiteral
-from typing_types import Type, TypeGroup, TypeTable, Name, TypeProcedure
+from typing_types import Type, TypeGroup, TypeTable, Name, TypeProcedure, MemoryLocation
 
 
 @dataclass
@@ -27,6 +29,13 @@ class IRTypeFloat(IRType):
 class IRTypeUInt(IRType):
     def __str__(self) -> str:
         return f"u{self.width*8}"
+
+@dataclass()
+class IRTypePointer(IRType):
+    width: int = typing_types.PLATFORM_POINTER_SIZE
+
+    def __str__(self):
+        return f"ptr"
 
 
 @dataclass
@@ -233,7 +242,7 @@ class IRInstAlloc:
 
 
 @dataclass
-class IRInstrStore(IRInstruction):
+class IRInstStore(IRInstruction):
     dest: VirtualRegister
     source: VirtualRegister | Immediate
 
@@ -263,11 +272,12 @@ class IRBlock:
 class IRProcedure:
     name: str
     blocks: List[IRBlock]
-    return_register: VirtualVariable | Immediate
+    return_register: VirtualVariable | Immediate | None
     arguments: List[VirtualVariable] = field(default_factory=list)
 
     def __str__(self) -> str:
-        out = f"procedure {self.name} ({', '.join(map(str, self.arguments))}) -> {self.return_register.type}:\n"
+        return_type = self.return_register.type if self.return_register else "None"
+        out = f"procedure {self.name} ({', '.join(map(str, self.arguments))}) -> {return_type}:\n"
         return out + "\n".join(map(str, self.blocks))
 
 binary_op_to_inst = {
@@ -318,8 +328,10 @@ class IRUnit:
             self.parse_expr("global", node, scope, self.global_blocks)
 
 
-    def type_to_ir_type(self, tt: int) -> IRType:
+    def type_to_ir_type(self, tt: int) -> Optional[IRType]:
         t = self.type_table.get(tt)
+        if t.info.group == TypeGroup.NO_VALUE:
+            return None
         assert t.info.size is not None, "Not implemented / Error"
         match t.info.group:
             case TypeGroup.INT:
@@ -330,12 +342,37 @@ class IRUnit:
                 return IRTypeUInt(t.info.size)
             case TypeGroup.BOOL:
                 return IRTypeUInt(t.info.size)
+            case TypeGroup.POINTER:
+                return IRTypePointer()
             case _:
                 raise NotImplementedError()
 
     def new_temporary(self, name: str, type: int):
         self.n_temporaries += 1
-        return VirtualRegister(f"t{self.n_temporaries}_{name}", self.type_to_ir_type(type))
+        register_type = self.type_to_ir_type(type)
+        assert register_type is not None
+        return VirtualRegister(f"t{self.n_temporaries}_{name}", register_type)
+
+    def parse_left_value(self, expr: ASTNode, scope: Scope, instructions: List[IRInstruction])\
+            -> Tuple[VirtualRegister, str]:
+        """Returns a tuple of register and a name string.
+        the name should be used for temporaries
+        the instructions argument should be an empty list append these instructions after appending the right value
+        instructions and before adding the final instruction
+        you need to add the final store instruction yourself storing to the returned register returned from here
+        """
+        match expr:
+            case ASTNodeValue(token=tok) if isinstance(tok, TokenName):
+                nn = scope.lookup(tok.name)
+                assert nn is not None
+                return self.variables[nn], tok.name
+            case ASTNodeUnaryRight(token=tok) if isinstance(tok, TokenOperator) and tok.op == Operator.POINTER:
+                reg, name = self.parse_left_value(expr.child, scope, instructions)
+                dest = self.new_temporary(name, expr.type)
+                instructions.append(IRInstLoad(expr.child.token.location, dest, reg))
+                return dest, name
+            case _:
+                raise NotImplementedError()
 
     def parse_expr(self, name: str, expr: ASTNode, scope: Scope, blocks: List[IRBlock]) \
             -> None | VirtualRegister | Immediate | IRProcedure:
@@ -357,25 +394,38 @@ class IRUnit:
                     case _:
                         raise NotImplementedError()
             case ASTNodeAssignment():
-                rv = self.parse_expr(expr.name.name, expr.expression, scope, blocks)
-                if rv is None:
-                    raise RuntimeError(f'Compiler Error: assignment must get something')
-                if (n := self.variables.get(expr.name, None)) is None:
+                if isinstance(expr.target, MemoryLocation):
+                    instructions: List[IRInstruction] = []
+                    reg, name = self.parse_left_value(expr.target.expression, scope, instructions)
+                    rv = self.parse_expr(name, expr.expression, scope, blocks)
+                    assert rv is not None
                     if isinstance(rv, IRProcedure):
-                        if expr.name.name == "main":
+                        raise NotImplementedError("Compiler Error: can not reassign procedures")
+                    blocks[-1].instructions += instructions
+                    blocks[-1].instructions.append(IRInstStore(expr.token.location, reg, rv))
+                    return rv
+                else:
+                    assert isinstance(expr.target, Name)
+                    # these are declarations so there should be no such variable
+                    assert self.variables.get(expr.target, None) is None
+
+                    rv = self.parse_expr(expr.target.name, expr.expression, scope, blocks)
+                    assert rv is not None
+                    if isinstance(rv, IRProcedure):
+                        if expr.target.name == "main":
                             self.main = rv
-                        self.procedures[expr.name] = rv
+                        self.procedures[expr.target] = rv
                         return None
                     else:
                         self.n_variables += 1
-                        n = VirtualVariable(f"v{self.n_variables}_{expr.name.name}", rv.type)
-                assert not isinstance(rv, IRProcedure), "Reassigning Procedure is not implemented"
-                self.variables[expr.name] = n
-                blocks[-1].instructions.append(IRInstAssign(expr.token.location, n, rv))
-                return rv
+                        n = VirtualVariable(f"v{self.n_variables}_{expr.target.name}", rv.type)
+                        self.variables[expr.target] = n
+                        blocks[-1].instructions.append(IRInstStore(expr.token.location, n, rv))
+                        return rv
             case ASTNodeUnary():
                 match expr.token:
                     case TokenOperator(op=Operator.PLUS):
+                        # unary plus is a nop
                         return self.parse_expr(name, expr.child, scope, blocks)
                     case TokenOperator(_, op) if op in unary_op_to_inst.keys():
                         rv = self.parse_expr(name, expr.child, scope, blocks)
@@ -387,8 +437,19 @@ class IRUnit:
                             return dest
                         else:
                             raise RuntimeError(f'Compiler Error: unary operator must operate on something')
+                    case TokenOperator(op=Operator.ADDRESS_OFF):
+                        assert isinstance(expr.child, ASTNodeValue) and isinstance(expr.child.token, TokenName)
+                        nn = scope.lookup(expr.child.token.name)
+                        assert nn is not None
+                        return self.variables[nn]
                     case _:
                         raise NotImplementedError()
+            case ASTNodeUnaryRight(token=tok) if tok.op == Operator.POINTER:
+                op1 = self.parse_expr(name, expr.child, scope, blocks)
+                assert isinstance(op1   , VirtualRegister)
+                dest = self.new_temporary(name, expr.type)
+                blocks[-1].instructions.append(IRInstLoad(expr.token.location, dest, op1))
+                return dest
             case ASTNodeBinary():
                 op1 = self.parse_expr(name, expr.left, scope, blocks)
                 op2 = self.parse_expr(name, expr.right, scope, blocks)
@@ -407,11 +468,15 @@ class IRUnit:
             case ASTNodeValue():
                 match expr.token:
                     case TokenNumberLiteral():
-                        return Immediate(expr.token.value, self.type_to_ir_type(expr.type))
+                        literal_type = self.type_to_ir_type(expr.type)
+                        assert literal_type is not None
+                        return Immediate(expr.token.value, literal_type)
                     case TokenName():
                         nn = scope.lookup(expr.token.name)
                         assert nn is not None
-                        return self.variables[nn]
+                        var_temp = self.new_temporary(nn.name, nn.type)
+                        blocks[-1].instructions.append(IRInstLoad(expr.token.location, var_temp, self.variables[nn]))
+                        return var_temp
                     case TokenStringLiteral():
                         raise NotImplementedError()
                     case TokenBoolLiteral():
@@ -428,7 +493,7 @@ class IRUnit:
                 # TODO currently the call gets the Name of the procedure but that is not the name the procedure has in
                 # the IR, to fix this we would need to assure that the procedure is already named before a call is done
                 # to assure this we need to parse constants before everything else maybe this can be done in the
-                # elaborate stage (seperate storage for constant declarations?)
+                # elaborate stage (separate storage for constant declarations?)
                 ir_proc = self.procedures.get(expr.procedure)
                 assert ir_proc is not None, "Failure in evaluation order"
                 args = []
@@ -439,7 +504,10 @@ class IRUnit:
                     args.append(xx)
                 proc_type = self.type_table.get(expr.procedure.type)
                 assert isinstance(proc_type, TypeProcedure)
-                dest = self.new_temporary(name, proc_type.return_type)
+                if self.type_table.get(proc_type.return_type).info.group == TypeGroup.NO_VALUE:
+                    dest = None
+                else:
+                    dest = self.new_temporary(name, proc_type.return_type)
                 blocks[-1].instructions.append(IRInstrCall(expr.token.location, dest, ir_proc, args))
                 return dest
             case ASTNodeIf():
@@ -496,11 +564,16 @@ class IRUnit:
                 self.n_proc += 1
                 proc_type = self.type_table.get(expr.type)
                 assert isinstance(proc_type, TypeProcedure)
-                return_register = VirtualVariable(f"proc{self.n_proc}_{name}_return",
-                                                  self.type_to_ir_type(proc_type.return_type))
+                proc_return_type = self.type_to_ir_type(proc_type.return_type)
+                if proc_return_type is None:
+                    return_register = None
+                else:
+                    return_register = VirtualVariable(f"proc{self.n_proc}_{name}_return", proc_return_type)
                 arguments = []
                 for arg in expr.argument_names:
-                    v = VirtualVariable(f"proc{self.n_proc}_{name}_arg_{arg.name}", self.type_to_ir_type(arg.type))
+                    argument_type = self.type_to_ir_type(arg.type)
+                    assert argument_type is not None
+                    v = VirtualVariable(f"proc{self.n_proc}_{name}_arg_{arg.name}", argument_type)
                     self.variables[arg] = v
                     arguments.append(v)
                 block_list = [IRBlock(f"proc{self.n_proc}_{name}_body")]

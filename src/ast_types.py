@@ -5,7 +5,7 @@ from typing import List, Optional
 from typing import TYPE_CHECKING
 
 from lexer_types import *
-from typing_types import Type, TypeType, Name
+from typing_types import Type, TypeType, Name, MemoryLocation
 
 if TYPE_CHECKING:
     from elaboration_types import Scope
@@ -46,7 +46,6 @@ class ASTNodeValue(ASTNode):
                 return f"{self.token.type.value}"
             case _:
                 raise RuntimeError(f"Bad Value {self.token}")
-
 
 @dataclass(slots=True)
 class ASTNodeBinary(ASTNode):
@@ -201,14 +200,14 @@ class ASTNodeTransmute(ASTNode):
 @dataclass(slots=True)
 class ASTNodeAssignment(ASTNode):
     node: ASTNodeBinary
-    name: Name
+    target: MemoryLocation | Name
     expression: ASTNode
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self):
-        return f"(ASSIGN {self.name} {self.expression})"
+        return f"(ASSIGN {self.target} = {self.expression})"
 
 
 @dataclass(slots=True)
@@ -254,6 +253,7 @@ UnaryBindingPower = {
     Operator.NOT: 8.0,
     Operator.BITWISE_NOT: 8.0,
     Operator.POINTER: 9.0,
+    Operator.CONSTANT_POINTER: 9.0,
     Operator.ADDRESS_OFF: 9.0,
 }
 

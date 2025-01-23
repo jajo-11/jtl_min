@@ -200,7 +200,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
             elif char == "+":
                 tokens.append(TokenOperator(location(), Operator.PLUS))
             elif char == "-":
-                tokens.append(TokenOperator(location(), Operator.MINUS))
+                append_multi_char_op([">"], Operator.MINUS, operators=[Operator.ARROW])
             elif char == "*":
                 tokens.append(TokenOperator(location(), Operator.TIMES))
             elif char == "/":

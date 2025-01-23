@@ -99,7 +99,9 @@ class ElaborationErrorType(Enum):
     WRONG_ARGUMENT_TYPE = ("Procedure signature missmatch", "Expected argument {} to have type {} got {}")
     GLOBAL_CALL = ("Unexpected call", "Can not call functions in the global scope")
     CASTING_ERROR = ("Casting error", "Can not cast objecto of type {} to type {}")
-
+    UNEXPECTED_POINTER_MODIFIER = ("Unexpected Operator",
+                                   "When specifying a type const must always follow a pointer operator")
+    WRITE_TO_CONST_POINTER = ("Assignment Error", "Can not write to const pointer")
 
 @dataclass
 class ElaborationError(JTLError):
@@ -128,7 +130,7 @@ class JTLTypeErrorType(Enum):
     EXPECTED_BOOLEAN_2x = ("Incompatible type", "Can not use '{}' on non booleans ({}, {})")
     EXPECTED_BOOLEAN = ("Incompatible type", "Can not use '{}' on non booleans of type {}")
     UNSAFE_UINT_TO_INT = ("Incompatible type", "Can not convert {} to an int as a 64bit int can not hold all values")
-    DEREFERENCE_VALUE = ("Incompatible type", "Can not dereference value")
+    DEREFERENCE_VALUE = ("Incompatible type", "Can not dereference value of type {} as it is not a pointer")
     EXPECTED_BOOLEAN_CONDITION = ("Unexpected type", "Condition must return/be a boolean value not {}")
     TYPE_MISSMATCH_RETURN = ("Type Error", "Returned value of type {}, expected a value of {}")
     BIT_OPERATOR_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
@@ -140,6 +142,7 @@ class JTLTypeErrorType(Enum):
     TRANSMUTE_UNRESOLVED_SIZE = ("Missing Type", "To transmute the size of the source type must be known."
                                        " (It is currently not enough that the type can be inferred later)")
     TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")
+    TYPE_MISSMATCH_ASSIGNMENT = ("Type Error", "Can not assign expression of type {} to value of type {}")
 
 
 @dataclass

@@ -37,10 +37,18 @@ class TestIr(unittest.TestCase):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/expression.jtl")
         self.assertEqual(target_ir, ir_striped)
 
-    def test_expression(self):
+    def test_if(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/if.jtl")
         self.assertEqual(target_ir, ir_striped)
 
-    def test_expression(self):
+    def test_loop(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/loop.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_procedure(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/procedure.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_pointers(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/pointers.jtl")
         self.assertEqual(target_ir, ir_striped)

@@ -13,28 +13,34 @@ let no = if sum > 0 and 1 == 1 then sum else -sum
 >>>
 
 global_block:
-  assign <i64>1 -> <i64>$v1_sum
-  less_equal <i64>$v1_sum <i64>1 -> <u64>%t1_if1_condition_global
-  jump_not_zero <u64>%t1_if1_condition_global -> @if1_true | @if1_end
+  store <i64>1 -> <i64>$v1_sum
+  load <i64>$v1_sum -> <i64>%t1_sum
+  less_equal <i64>%t1_sum <i64>1 -> <u64>%t2_if1_condition_global
+  jump_not_zero <u64>%t2_if1_condition_global -> @if1_true | @if1_end
 if1_true:
-  add <i64>$v1_sum <i64>1 -> <i64>%t2_sum
-  multiply <i64>%t2_sum <i64>$v1_sum -> <i64>%t3_sum
-  assign <i64>%t3_sum -> <i64>$v1_sum
-  multiply <i64>1 <i64>2 -> <i64>%t4_a
-  assign <i64>%t4_a -> <i64>$v2_a
+  load <i64>$v1_sum -> <i64>%t3_sum
+  add <i64>%t3_sum <i64>1 -> <i64>%t4_sum
+  load <i64>$v1_sum -> <i64>%t5_sum
+  multiply <i64>%t4_sum <i64>%t5_sum -> <i64>%t6_sum
+  store <i64>%t6_sum -> <i64>$v1_sum
+  multiply <i64>1 <i64>2 -> <i64>%t7_a
+  store <i64>%t7_a -> <i64>$v2_a
 if1_end:
-  greater <i64>$v1_sum <i64>0 -> <u64>%t5_if2_condition_no
-  equal <i64>1 <i64>1 -> <u64>%t6_if2_condition_no
-  and_logical <u64>%t5_if2_condition_no <u64>%t6_if2_condition_no -> <u64>%t7_if2_condition_no
-  jump_not_zero <u64>%t7_if2_condition_no -> @if2_true | @if2_else
+  load <i64>$v1_sum -> <i64>%t8_sum
+  greater <i64>%t8_sum <i64>0 -> <u64>%t9_if2_condition_no
+  equal <i64>1 <i64>1 -> <u64>%t10_if2_condition_no
+  and_logical <u64>%t9_if2_condition_no <u64>%t10_if2_condition_no -> <u64>%t11_if2_condition_no
+  jump_not_zero <u64>%t11_if2_condition_no -> @if2_true | @if2_else
 if2_true:
+  load <i64>$v1_sum -> <i64>%t12_sum
   jump @if2_end
 if2_else:
-  neg <i64>$v1_sum -> <i64>%t8_no
+  load <i64>$v1_sum -> <i64>%t13_sum
+  neg <i64>%t13_sum -> <i64>%t14_no
   jump @if2_end
 if2_end:
-  phi @if2_true <i64>$v1_sum @if2_else <i64>%t8_no -> <i64>%t9_no
-  assign <i64>%t9_no -> <i64>$v3_no
+  phi @if2_true <i64>%t12_sum @if2_else <i64>%t14_no -> <i64>%t15_no
+  store <i64>%t15_no -> <i64>$v3_no
 main: Not Found
 <<<
 */

@@ -1,7 +1,7 @@
 [project]
 authors = ["Joschka Goes <jajo_11@outlook.com>"]
 channels = ["conda-forge"]
-description = "Add a short description here"
+description = "Compiler for Joschkas Toy Language"
 name = "jtl_min"
 platforms = ["win-64", "linux-64"]
 version = "0.1.0"

@@ -9,10 +9,12 @@ global_block:
   multiply <i64>3 <i64>%t1_sum -> <i64>%t2_sum
   neg <i64>2 -> <i64>%t3_sum
   multiply <i64>%t2_sum <i64>%t3_sum -> <i64>%t4_sum
-  assign <i64>%t4_sum -> <i64>$v1_sum
-  divide <i64>$v1_sum <i64>$v1_sum -> <i64>%t5_two
-  add <i64>%t5_two <i64>1 -> <i64>%t6_two
-  assign <i64>%t6_two -> <i64>$v2_two
+  store <i64>%t4_sum -> <i64>$v1_sum
+  load <i64>$v1_sum -> <i64>%t5_sum
+  load <i64>$v1_sum -> <i64>%t6_sum
+  divide <i64>%t5_sum <i64>%t6_sum -> <i64>%t7_two
+  add <i64>%t7_two <i64>1 -> <i64>%t8_two
+  store <i64>%t8_two -> <i64>$v2_two
 main: Not Found
 <<<
 */

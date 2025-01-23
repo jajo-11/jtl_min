@@ -122,7 +122,7 @@ class TestParser(unittest.TestCase):
         self.assertEqual(expected_result, result)
 
         tokens = lex_file("test_file",
-                          "const fn = proc(a: int): ^int {\n"
+                          "const fn = proc(a: int) -> ^int {\n"
                           "    return malloc(a * size_of(int))\n"
                           "}\n")
         expected_result = "\n".join([
