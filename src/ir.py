@@ -334,7 +334,21 @@ class IRUnit:
             case ASTNodeIf():
                 raise NotImplementedError()
             case ASTNodeWhile():
-                raise NotImplementedError()
+                loop_head = self.new_label(node.token.location)
+                loop_body = self.new_label(node.token.location)
+                loop_end = self.new_label(node.token.location)
+                instructions.append(loop_head)
+
+                cond = self.ast_node_to_ir(node.condition, scope, instructions)
+                instructions.append(IRInstJumpNotZero(node.token.location, cond, loop_end, loop_body))
+
+                instructions.append(loop_body)
+                assert node.elaborated_body is not None
+                self.lower_scope(node.elaborated_body, instructions, [])
+
+                instructions.append(IRInstJump(node.token.location, loop_head.name))
+                instructions.append(loop_end)
+                return None
             case _:
                 raise NotImplementedError()
 
@@ -371,7 +385,6 @@ class IRUnit:
 
         for ir_proc, procedure in zip(self.procedures.values(), scope.procedures.values()):
             assert procedure.elaborated_body is not None
-            # TODO arguments are allocated but not stored
             self.lower_scope(procedure.elaborated_body, ir_proc.body, procedure.argument_names)
 
         for s_name, o_name in scope.names.items():
