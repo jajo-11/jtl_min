@@ -1,4 +1,6 @@
+import io
 import unittest
+from io import StringIO
 
 import elaborate
 from ir import IRUnit
@@ -23,8 +25,12 @@ def eval_and_get_saved_ir(file_name: str) -> (str, str):
     exprs = parse_tokens(tokens)
     global_scope = elaborate.elaborate_module(exprs)
     unit = IRUnit(global_scope)
+
+    ir_buffer = io.StringIO()
+    unit.write(ir_buffer)
+    ir_buffer.seek(0, io.SEEK_SET)
     # my editor removes trailing whitespaces on save so the ir saved in test is missing some spaces
-    ir_striped = "\n".join(map(lambda x: x.rstrip(), str(unit).splitlines()))
+    ir_striped = "\n".join(map(lambda x: x.rstrip(), ir_buffer.readlines()))
     return target_ir, ir_striped
 
 
@@ -51,4 +57,8 @@ class TestIr(unittest.TestCase):
 
     def test_pointers(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/pointers.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_records(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/records.jtl")
         self.assertEqual(target_ir, ir_striped)

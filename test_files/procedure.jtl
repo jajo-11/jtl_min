@@ -9,27 +9,28 @@ const main = proc() -> int {
 
 /*
 >>>
-procedure proc1_sum (<i32>$proc1_sum_arg_a, <i32>$proc1_sum_arg_b) -> f32:
-proc1_sum_body:
-  load <i32>$proc1_sum_arg_a -> <i32>%t1_a
-  load <i32>$proc1_sum_arg_b -> <i32>%t2_b
-  add <i32>%t1_a <i32>%t2_b -> <i32>%t3_return
-  cast <i32>%t3_return -> <f32>%t4_return
-  return <f32>%t4_return
+procedure f32 @1_sum(i32 %a, i32 %b) {
+    %3_a = alloc 4 align 4
+    %4_b = alloc 4 align 4
+    store i32 %a into %3_a
+    store i32 %b into %4_b
+    %5 = load i32 %3_a
+    %6 = load i32 %4_b
+    %7 = add i32 %5, %6
+    %8 = cast f32 %7
+    return %8
+}
 
-procedure proc2_main () -> i32:
-proc2_main_body:
-  store <i64>10 -> <i64>$v1_factor
-  call proc1_sum (<i32>1, <i32>2) -> <f32>%t5_return
-  load <i64>$v1_factor -> <i64>%t6_factor
-  cast <i64>%t6_factor -> <f32>%t7_return
-  multiply <f32>%t5_return <f32>%t7_return -> <f32>%t8_return
-  cast <f32>%t8_return -> <i32>%t9_return
-  return <i32>%t9_return
+procedure i32 @2_main() {
+    %9_factor = alloc 8 align 8
+    store i64 10 into %9_factor
+    %10 = call f32 @1_sum(i32 1, i32 2)
+    %11 = load i64 %9_factor
+    %12 = cast f32 %11
+    %13 = mul f32 %10, %12
+    %14 = cast i32 %13
+    return %14
+}
 
-
-global_block:
-
-main: Found
 <<<
 */

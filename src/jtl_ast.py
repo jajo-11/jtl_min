@@ -147,8 +147,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, curly_bracket.location)
             lhs = ASTNodeWhile(lhs_token, condition, nodes)
-        case (TokenKeyword(keyword=Keyword.RECORD) | TokenKeyword(keyword=Keyword.CAST)
-              | TokenKeyword(keyword=Keyword.TRANSMUTE)):
+        case TokenKeyword(keyword=Keyword.CAST) | TokenKeyword(keyword=Keyword.TRANSMUTE):
             match bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
                     it.next()
@@ -156,6 +155,19 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                     lhs = ASTNodeTupleLike(lhs_token, nodes, None)
                 case _:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_BRACKET, it.peak().location)
+        case TokenKeyword(keyword=Keyword.RECORD):
+            match it.peak():
+                case TokenBracket(open=True, type=BracketType.CURLY):
+                    it.next()
+                case _:
+                    raise ParserError.from_type(ParserErrorType.EXPECTED_BODY_RECORD, it.peak().location)
+            nodes = parse_list_of_exprs(it, end_on_curly=True)
+            match end_token := it.peak():
+                case TokenBracket(open=False, type=BracketType.CURLY):
+                    it.next()
+                case _:
+                    raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, end_token.location)
+            lhs = ASTNodeRecord(lhs_token, nodes)
         case TokenBracket(open=True, type=BracketType.ROUND):
             nodes = parse_tuple_like(it, lhs_token)
             if len(nodes) == 0:

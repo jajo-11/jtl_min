@@ -1,47 +1,50 @@
 const main = proc() -> int {
     const a: u32 = 2
-    let a2 = a >> 1 // arithmetic shift
+    let a2 = a >> 1 // logical shift
     let a3 = a2 | a
     let a4 = a3 & 2
     let b: i32 = -1
-    let b1 = b >> 1
+    let b1 = b >> 1 // arithmetic shift
     let c = a4 xor transmute(u32, b1)
     return cast(i32, ~c)
 }
 
 /*
 >>>
-procedure proc1_main () -> i32:
-proc1_main_body:
-  store <u32>2 -> <u32>$v1_a
-  load <u32>$v1_a -> <u32>%t1_a
-  shift_right_arithmetic <u32>%t1_a <i64>1 -> <u32>%t2_a2
-  store <u32>%t2_a2 -> <u32>$v2_a2
-  load <u32>$v2_a2 -> <u32>%t3_a2
-  load <u32>$v1_a -> <u32>%t4_a
-  or_bitwise <u32>%t3_a2 <u32>%t4_a -> <u32>%t5_a3
-  store <u32>%t5_a3 -> <u32>$v3_a3
-  load <u32>$v3_a3 -> <u32>%t6_a3
-  and_bitwise <u32>%t6_a3 <u32>2 -> <u32>%t7_a4
-  store <u32>%t7_a4 -> <u32>$v4_a4
-  neg <i32>1 -> <i32>%t8_b
-  store <i32>%t8_b -> <i32>$v5_b
-  load <i32>$v5_b -> <i32>%t9_b
-  shift_right_logical <i32>%t9_b <i64>1 -> <i32>%t10_b1
-  store <i32>%t10_b1 -> <i32>$v6_b1
-  load <u32>$v4_a4 -> <u32>%t11_a4
-  load <i32>$v6_b1 -> <i32>%t12_b1
-  move <i32>%t12_b1 -> <u32>%t13_c
-  xor <u32>%t11_a4 <u32>%t13_c -> <u32>%t14_c
-  store <u32>%t14_c -> <u32>$v7_c
-  load <u32>$v7_c -> <u32>%t15_c
-  not_bitwise <u32>%t15_c -> <u32>%t16_return
-  cast <u32>%t16_return -> <i32>%t17_return
-  return <i32>%t17_return
+procedure i32 @1_main() {
+    %2_a = alloc 4 align 4
+    %3_a2 = alloc 4 align 4
+    %4_a3 = alloc 4 align 4
+    %5_a4 = alloc 4 align 4
+    %6_b = alloc 4 align 4
+    %7_b1 = alloc 4 align 4
+    %8_c = alloc 4 align 4
+    store u32 2 into %2_a
+    %9 = load u32 %2_a
+    %10 = lshr u32 %9, 1
+    store u32 %10 into %3_a2
+    %11 = load u32 %3_a2
+    %12 = load u32 %2_a
+    %13 = or_bitwise u32 %11, %12
+    store u32 %13 into %4_a3
+    %14 = load u32 %4_a3
+    %15 = and_bitwise u32 %14, 2
+    store u32 %15 into %5_a4
+    %16 = neg i32 1
+    store i32 %16 into %6_b
+    %17 = load i32 %6_b
+    %18 = ashr i32 %17, 1
+    store i32 %18 into %7_b1
+    %19 = load u32 %5_a4
+    %20 = load i32 %7_b1
+    %21 = copy u32 %20
+    %22 = xor u32 %19, %21
+    store u32 %22 into %8_c
+    %23 = load u32 %8_c
+    %24 = not u32 %23
+    %25 = cast i32 %24
+    return %25
+}
 
-
-global_block:
-
-main: Found
 <<<
 */

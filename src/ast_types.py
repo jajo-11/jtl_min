@@ -1,14 +1,11 @@
 import itertools
 from dataclasses import field
-from typing import List, Optional
-
-from typing import TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
 
 from lexer_types import *
-from typing_types import Type, TypeType, Name, MemoryLocation
 
 if TYPE_CHECKING:
-    from elaboration_types import Scope
+    from elaboration_types import Scope, Name, Record
 
 @dataclass
 class ASTNode:
@@ -103,15 +100,27 @@ class ASTNodeTupleLike(ASTNode):
 
 @dataclass(slots=True)
 class ASTNodeScope(ASTNode):
-    nodes: List[ASTNode]
+    body: List[ASTNode]
     elaborated_body: Optional["Scope"] = None
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self) -> str:
-        lines = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.nodes))
+        lines = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return "Scope:\n  " + "\n  ".join(lines)
+
+
+@dataclass(slots=True)
+class ASTNodeRecord(ASTNode):
+    body: List[ASTNode]
+
+    def __repr__(self):
+        return f"{type(self).__name__}<{str(self)}>"
+
+    def __str__(self) -> str:
+        lines = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
+        return "(Record\n  " + "\n  ".join(lines) + ")"
 
 
 @dataclass(slots=True)
@@ -152,7 +161,7 @@ class ASTNodeProcedure(ASTNode):
     arguments: List[ASTNode]
     return_type_expr: Optional[ASTNode]
     body: List[ASTNode]
-    argument_names: List[Name] = field(default_factory=list)
+    argument_names: List["Name"] = field(default_factory=list)
     elaborated_body: Optional["Scope"] = None
 
     def __repr__(self):
@@ -166,41 +175,41 @@ class ASTNodeProcedure(ASTNode):
 @dataclass(slots=True)
 class ASTNodeStatement(ASTNode):
     token: TokenKeyword
-    value: Optional[ASTNode]
+    child: Optional[ASTNode]
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self) -> str:
-        return f"({self.token.keyword.value} {self.value})"
+        return f"({self.token.keyword.value} {self.child})"
 
 
 @dataclass(slots=True)
 class ASTNodeCast(ASTNode):
-    node: ASTNode
+    child: ASTNode
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self) -> str:
-        return f"(cast {self.type} {self.node})"
+        return f"(cast {self.type} {self.child})"
 
 
 @dataclass(slots=True)
 class ASTNodeTransmute(ASTNode):
-    node: ASTNode
+    child: ASTNode
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self) -> str:
-        return f"(transmute {self.type} {self.node})"
+        return f"(transmute {self.type} {self.child})"
 
 
 @dataclass(slots=True)
 class ASTNodeAssignment(ASTNode):
     node: ASTNodeBinary
-    target: MemoryLocation | Name
+    target: Union[ASTNode, "Name"]
     expression: ASTNode
 
     def __repr__(self):
@@ -212,14 +221,14 @@ class ASTNodeAssignment(ASTNode):
 
 @dataclass(slots=True)
 class ASTNodeCall(ASTNode):
-    procedure: Name
+    procedure: "Name"
     arguments: List[ASTNode]
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __str__(self):
-        return f"(call {self.name} ({", ".join(map(str, self.arguments))})"
+        return f"(call {self.procedure.name} ({", ".join(map(str, self.arguments))})"
 
 
 # associativity is encoded by biasing the binding power

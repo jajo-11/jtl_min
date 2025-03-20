@@ -1,5 +1,91 @@
-const vec3 = record (
-    x: int,
-    y: int,
-    z: int,
-)
+const Vec3 = record {
+    var x: int
+    var y: int
+    var z: int
+
+//    const length_square = proc() -> int {
+//        return self.x * self.x + self.y * self.y + self.z * self.z
+//    }
+//
+//    const zero = Vec3(0, 0, 0)
+}
+
+const LinkedList = record {
+    var element: int
+    var next: ^LinkedList
+}
+
+const main = proc() -> int {
+    var vec = Vec3(1, 2, 3)
+    var vec_copy = vec
+    let b = vec.x
+    vec.y = b
+
+    var vec2 = @Vec3(3, 2, 1)
+    let y = @vec2.y // take address of field without explicitly dereferencing
+    y^ = -2
+    vec2.z = 3
+
+//    let c = vec.length_square()
+    var a = LinkedList(1, cast(^LinkedList, 0))
+    var bb = LinkedList(2, @a)
+    a.next = @bb
+}
+
+/*
+>>>
+&1_Vec3 = type i32, i32, i32
+&2_LinkedList = type i32, ptr
+procedure i32 @3_main() {
+    %4_vec = alloc 12 align 4
+    %5_vec_copy = alloc 12 align 4
+    %6_b = alloc 4 align 4
+    %7_[anonymous_record_15] = alloc 12 align 4
+    %8_vec2 = alloc 8 align 8
+    %9_y = alloc 8 align 8
+    %10_a = alloc 16 align 8
+    %11_bb = alloc 16 align 8
+    %12 = get_ptr %4_vec[0].0
+    store i32 1 into %12
+    %13 = get_ptr %4_vec[0].1
+    store i32 2 into %13
+    %14 = get_ptr %4_vec[0].2
+    store i32 3 into %14
+    memcpy 12 from %4_vec to %5_vec_copy
+    %15 = get_ptr %4_vec[0].0
+    %16 = load i32 %15
+    store i32 %16 into %6_b
+    %17 = load i32 %6_b
+    %18 = get_ptr %4_vec[0].1
+    store i32 %17 into %18
+    %19 = get_ptr %7_[anonymous_record_15][0].0
+    store i32 3 into %19
+    %20 = get_ptr %7_[anonymous_record_15][0].1
+    store i32 2 into %20
+    %21 = get_ptr %7_[anonymous_record_15][0].2
+    store i32 1 into %21
+    store ptr %7_[anonymous_record_15] into %8_vec2
+    %22 = load ptr %8_vec2
+    %23 = get_ptr %22[0].1
+    store ptr %23 into %9_y
+    %24 = neg i32 2
+    %25 = load ptr %9_y
+    store i32 %24 into %25
+    %26 = load ptr %8_vec2
+    %27 = get_ptr %26[0].2
+    store i32 3 into %27
+    %28 = cast ptr 0
+    %29 = get_ptr %10_a[0].0
+    store i32 1 into %29
+    %30 = get_ptr %10_a[0].1
+    store ptr %28 into %30
+    %31 = get_ptr %11_bb[0].0
+    store i32 2 into %31
+    %32 = get_ptr %11_bb[0].1
+    store ptr %10_a into %32
+    %33 = get_ptr %10_a[0].1
+    store ptr %11_bb into %33
+}
+
+<<<
+*/

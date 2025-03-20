@@ -21,49 +21,55 @@ const main = proc() -> int {
 
 /*
 >>>
-procedure proc1_raw_increment (<ptr>$proc1_raw_increment_arg_value) -> None:
-proc1_raw_increment_body:
-  load <ptr>$proc1_raw_increment_arg_value -> <ptr>%t2_value
-  load <ptr>%t2_value -> <i32>%t3_value
-  add <i32>%t3_value <i32>1 -> <i32>%t4_value
-  load <ptr>$proc1_raw_increment_arg_value -> <i32>%t1_value
-  store <i32>%t4_value -> <i32>%t1_value
+procedure None @1_raw_increment(ptr %value) {
+    %5_value = alloc 8 align 8
+    store ptr %value into %5_value
+    %6 = load ptr %5_value
+    %7 = load i32 %6
+    %8 = add i32 %7, 1
+    %9 = load ptr %5_value
+    store i32 %8 into %9
+}
 
-procedure proc2_return_increment (<ptr>$proc2_return_increment_arg_value) -> i32:
-proc2_return_increment_body:
-  load <ptr>$proc2_return_increment_arg_value -> <ptr>%t5_value
-  load <ptr>%t5_value -> <i32>%t6_return
-  add <i32>%t6_return <i32>1 -> <i32>%t7_return
-  return <i32>%t7_return
+procedure i32 @2_return_increment(ptr %value) {
+    %10_value = alloc 8 align 8
+    store ptr %value into %10_value
+    %11 = load ptr %10_value
+    %12 = load i32 %11
+    %13 = add i32 %12, 1
+    return %13
+}
 
-procedure proc3_double_indirection (<ptr>$proc3_double_indirection_arg_value) -> i32:
-proc3_double_indirection_body:
-  load <ptr>$proc3_double_indirection_arg_value -> <ptr>%t10_value
-  load <ptr>%t10_value -> <ptr>%t11_value
-  load <ptr>%t11_value -> <i32>%t12_value
-  load <ptr>$proc3_double_indirection_arg_value -> <ptr>%t13_value
-  load <ptr>%t13_value -> <ptr>%t14_value
-  load <ptr>%t14_value -> <i32>%t15_value
-  multiply <i32>%t12_value <i32>%t15_value -> <i32>%t16_value
-  load <ptr>$proc3_double_indirection_arg_value -> <ptr>%t8_value
-  load <ptr>%t8_value -> <i32>%t9_value
-  store <i32>%t16_value -> <i32>%t9_value
+procedure i32 @3_double_indirection(ptr %value) {
+    %14_value = alloc 8 align 8
+    store ptr %value into %14_value
+    %15 = load ptr %14_value
+    %16 = load ptr %15
+    %17 = load i32 %16
+    %18 = load ptr %14_value
+    %19 = load ptr %18
+    %20 = load i32 %19
+    %21 = mul i32 %17, %20
+    %22 = load ptr %14_value
+    %23 = load ptr %22
+    store i32 %21 into %23
+}
 
-procedure proc4_main () -> i32:
-proc4_main_body:
-  store <i32>1 -> <i32>$v1_a
-  store <i32>$v1_a -> <i32>$v2_ap
-  call proc2_return_increment (<i32>$v1_a) -> <i32>%t17_b
-  store <i32>%t17_b -> <i32>$v3_b
-  call proc1_raw_increment (<i32>$v1_a) -> None
-  call proc3_double_indirection (<i32>$v2_ap) -> <i32>%t18_c
-  store <i32>%t18_c -> <i32>$v4_c
-  load <i32>$v1_a -> <i32>%t19_a
-  return <i32>%t19_a
+procedure i32 @4_main() {
+    %24_a = alloc 4 align 4
+    %25_ap = alloc 8 align 8
+    %26_b = alloc 4 align 4
+    %27_c = alloc 4 align 4
+    store i32 1 into %24_a
+    store ptr %24_a into %25_ap
+    %28 = call i32 @2_return_increment(ptr %24_a)
+    store i32 %28 into %26_b
+    call @1_raw_increment(ptr %24_a)
+    %29 = call i32 @3_double_indirection(ptr %25_ap)
+    store i32 %29 into %27_c
+    %30 = load i32 %24_a
+    return %30
+}
 
-
-global_block:
-
-main: Found
 <<<
 */

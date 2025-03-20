@@ -1,12 +1,13 @@
 from copy import copy
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, List, Iterable, Any, TYPE_CHECKING
+from typing import Optional, Dict, List, Iterable, Any, TYPE_CHECKING, Protocol
 
 from lexer_types import CodeLocation, BuildInType
 
 if TYPE_CHECKING:
-    from ast_types import ASTNode
+    from ast_types import ASTNode, ASTNodeProcedure, ASTNodeRecord
+    from elaboration_types import Record
 
 
 class TypeGroup(Enum):
@@ -17,7 +18,7 @@ class TypeGroup(Enum):
     BOOL = "bool"
     SYMBOL = "symbol"
     POINTER = "pointer"
-    COMPOUND = "compound"
+    RECORD = "record"
     PROCEDURE = "procedure"
     TYPE = "type"
     NO_VALUE = "no_value"
@@ -39,8 +40,10 @@ class TypeInfo:
         return self.size == other.size and self.group == other.group
 
 
+
 PLATFORM_POINTER_SIZE = 8
 PLATFORM_INT_SIZE = 4
+PLATFORM_BOOL_SIZE = 8
 
 
 class TypeType(Enum):
@@ -50,8 +53,8 @@ class TypeType(Enum):
     FLOAT_LITERAL = TypeInfo("float_literal", None, TypeGroup.FLOAT)
     INT = TypeInfo("int", PLATFORM_INT_SIZE, TypeGroup.INT)
     UINT = TypeInfo("uint", PLATFORM_INT_SIZE, TypeGroup.UINT)
-    BOOL = TypeInfo("bool", 8, TypeGroup.BOOL)
-    STRING = TypeInfo("str", None, TypeGroup.COMPOUND)
+    BOOL = TypeInfo("bool", PLATFORM_BOOL_SIZE, TypeGroup.BOOL)
+    STRING = TypeInfo("str", None, TypeGroup.RECORD)
     CHAR = TypeInfo("char", 1, TypeGroup.SYMBOL)
     I8 = TypeInfo("i8", 1, TypeGroup.INT)
     I16 = TypeInfo("i16", 2, TypeGroup.INT)
@@ -67,7 +70,7 @@ class TypeType(Enum):
     F64 = TypeInfo("f64", 8, TypeGroup.FLOAT)
     TYPE = TypeInfo("type", None, TypeGroup.TYPE)
     NO_VALUE = TypeInfo("no_value", None, TypeGroup.NO_VALUE)
-    RECORD = TypeInfo("record", None, TypeGroup.COMPOUND)
+    RECORD = TypeInfo("record", None, TypeGroup.RECORD)
     POINTER = TypeInfo("pointer", PLATFORM_POINTER_SIZE, TypeGroup.POINTER)
     PROCEDURE = TypeInfo("procedure", None, TypeGroup.PROCEDURE)
     RETURNS = TypeInfo("returns", None, TypeGroup.RETURNS)
@@ -102,52 +105,6 @@ class Mutability(Enum):
     CONSTANT = "const"
     ONCE = "let"
     MUTABLE = "var"
-
-@dataclass(slots=True)
-class MemoryLocation:
-    type: int
-    expression: "ASTNode"
-    mut: Mutability = Mutability.MUTABLE
-
-    def __str__(self):
-        return f"Memory Location [{self.expression}]"
-
-@dataclass(slots=True)
-class Name:
-    id: int
-    name: str
-    declaration_location: CodeLocation
-    type: int
-    type_table: "TypeTable"
-    mut: Mutability = Mutability.ONCE
-
-    def __str__(self):
-        return (f"{self.mut.value} {self.name}: {self.type_table.get(self.type)}"
-                f" @ {self.declaration_location}")
-
-    def __hash__(self):
-        return self.id
-
-    def __eq__(self, other):
-        if isinstance(other, Name):
-            return self.id == other.id
-        else:
-            return False
-
-
-class Record:
-    __slots__ = ("name", "fields", "size", "type_table")
-
-    def __init__(self, name: Name, fields: Iterable[Name], type_table: "TypeTable"):
-        self.name: Name = name
-        self.fields: List[Name] = list(fields)
-        self.type_table = type_table
-        # FIXME: alignment, what about 0 size types? (None)
-        # self.size = sum(map(lambda f: self.type_table.get(f.type).info.size, self.fields))
-        self.size = 0
-
-    def __str__(self) -> str:
-        return self.name.name
 
 
 class Type:
@@ -189,21 +146,33 @@ class TypeTable:
         self.table[current] = new
 
 
-class TypeRecord(Type):
+class TypeRecordType(Type):
     __slots__ = ("info", "record")
 
-    def __init__(self, record: Record):
-        super().__init__(TypeType.RECORD)
-        self.record: Record = record
-        self.info.size = record.size
+    def __init__(self, record: "Record"):
+        super().__init__(TypeType.TYPE)
+        self.record: "Record" = record
 
     def __str__(self) -> str:
-        return str(self.record.name)
+        return f"Record[{self.record.name}]"
 
     def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, TypeRecord):
+        if not isinstance(other, TypeRecordType):
             return False
         return self.record == other.record
+
+    def to_instance_type(self) -> "TypeRecordInstance":
+        rv = TypeRecordInstance(self.record)
+        rv.info = copy(self.info)
+        rv.info.group = TypeGroup.RECORD
+        return rv
+
+
+class TypeRecordInstance(TypeRecordType):
+    """Do not construct manually use TypeRecordType.to_instance_type()"""
+
+    def __str__(self) -> str:
+        return f"RecordInstance[{self.record.name}]"
 
 
 class TypePointer(Type):

@@ -137,9 +137,12 @@ class TestParser(unittest.TestCase):
 
     def test_record(self):
         tokens = lex_file("test_file",
-                          "const vec3 = record(x, y, z: float)")
+                          "const vec3 = record { x: float\ny: float\nz: float }")
         expected_result = \
-            "(const (= vec3 (record None [x y (: z float)])))"
+            """(const (= vec3 (Record
+  (: x float)
+  (: y float)
+  (: z float))))"""
 
         result = str(parse_tokens(tokens)[0])
         self.assertEqual(expected_result, result)

@@ -1,5 +1,4 @@
 import sys
-from pprint import pprint
 
 from ir import IRUnit
 from jtl_ast import parse_tokens
@@ -29,4 +28,4 @@ if __name__ == '__main__':
 
     print("Generating IR...")
     ir = IRUnit(global_scope)
-    print(ir)
+    ir.write(sys.stdout)

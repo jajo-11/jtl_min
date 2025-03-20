@@ -1,7 +1,8 @@
+import operator
 from typing import Tuple
 
 from ast_types import *
-from elaboration_types import Scope
+from elaboration_types import Scope, Name, Record
 from typing_types import *
 from errors import ElaborationError, ElaborationErrorType, JTLTypeError, JTLTypeErrorType
 
@@ -23,7 +24,7 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
                 case TypeGroup.INT:
                     scope.type_table.overwrite(i, Type(TypeType.I64))
                 case TypeGroup.UINT:
-                    # unless the - unary is used all int literals start out as UINTs conveting them to U64 would
+                    # unless the - unary is used all int literals start out as UINTs converting them to U64 would
                     # probably be surprising to the user when doing a - b etc. so if no information is available they
                     # get converted to I64
                     scope.type_table.overwrite(i, Type(TypeType.I64))
@@ -35,19 +36,99 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
                     raise RuntimeError("Found symbol type with none size in Type Table")
                 case TypeGroup.POINTER:
                     raise RuntimeError("Found pointer type with none size in Type Table")
-                case TypeGroup.COMPOUND:
+                case TypeGroup.RECORD:
                     raise RuntimeError("Found compound type with none size in Type Table")
 
     return scope
 
 
 def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[ASTNodeProcedure]) -> None:
+    non_constant_nodes: List[Tuple[int, ASTNode]] = []
+    constant_nodes: List[ASTNodeStatement] = []
+    records: List[Tuple[Record, ASTNodeRecord]] = []
+
+    # records need to be elaborated first so that field access can be validated
+
+    # first get all the names of records
     for i, node in enumerate(nodes):
-        elaborate_statement(parent, node, returnable)
-        if parent.type_table.get(parent.nodes[-1].type).info.group == TypeGroup.RETURNS and i != (len(nodes) - 1):
+        if isinstance(node, ASTNodeStatement) and isinstance(node.token, TokenKeyword) and node.token.keyword == Keyword.CONSTANT:
+            assert node.child is not None
+            if (isinstance(node.child, ASTNodeBinary) and isinstance(node.child.token, TokenOperator)
+                and node.child.token.op == Operator.ASSIGNMENT) and isinstance(node.child.right, ASTNodeRecord):
+                left = node.child.left
+                if not (isinstance(left, ASTNodeValue) and isinstance(left.token, TokenName)):
+                    raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
+                                                     left.token.location)
+                record = Record(parent.unique_indexer.next(), node.child.right, left.token.name)
+                record_type = parent.type_table.new(TypeRecordType(record))
+                name = Name(
+                    parent.unique_indexer.next(),
+                    left.token.name,
+                    left.token.location.whole_line(),
+                    record_type,
+                    parent.type_table)
+                parent.names[left.token.name] = name
+                parent.record_types[name] = record
+                records.append((record, node.child.right))
+                node.child.right.type = record_type
+            else:
+                constant_nodes.append(node)
+        else:
+            non_constant_nodes.append((i, node))
+
+    # second elaborate the records
+    for record, node in records:
+        elaborate_record(record, parent, node.body)
+
+    # third update size of record types (needed to elaborate the records first)
+    # this also performs a cyclic dependency check
+    # FIXME: this is a bit odd this sets the size of the type to the size of the instance
+    for record, node in records:
+        nt = parent.type_table.get(node.type)
+        nt.info.size = record.get_size()
+
+    # fourth process the constants - calls to procedures are not allowed for now (Constructors?)
+    for node in constant_nodes:
+        assert node.child is not None
+        expr = elaborate_declaration(parent, node.child, True, returnable)
+        assert isinstance(expr.target, Name)
+        expr.target.mut = Mutability.CONSTANT
+        # TODO these should be evaluated at compile time and added to a separate memory section (data)
+        if not isinstance(expr.expression, ASTNodeProcedure):
+            parent.body.append(expr)
+
+    # fifth all other expressions - procedure bodies are deferred
+    for i, node in non_constant_nodes:
+        match node:
+            case ASTNodeStatement():
+                match node.token:
+                    case TokenKeyword(keyword=Keyword.VARIABLE):
+                        assert (node.child is not None)
+                        expr = elaborate_declaration(parent, node.child, False, returnable)
+                        assert isinstance(expr.target, Name)
+                        expr.target.mut = Mutability.MUTABLE
+                        parent.body.append(expr)
+                    case TokenKeyword(keyword=Keyword.LET):
+                        assert (node.child is not None)
+                        expr = elaborate_declaration(parent, node.child, False, returnable)
+                        assert isinstance(expr.target, Name)
+                        expr.target.mut = Mutability.ONCE
+                        parent.body.append(expr)
+                    case TokenKeyword(keyword=Keyword.CONSTANT):
+                        assert False, "These should have been handled already"
+                    case _:
+                        parent.body.append(elaborate_expression(parent, node, False, returnable))
+            case _:
+                parent.body.append(elaborate_expression(parent, node, False, returnable))
+
+        if parent.type_table.get(parent.body[-1].type).info.group == TypeGroup.RETURNS and i != (len(nodes) - 1):
             raise ElaborationError.from_type(ElaborationErrorType.UNREACHABLE, nodes[-1].token.location.whole_line())
 
-    for proc in parent.delayed_elaborate:
+    # sixth procedures are elaborated last so that they can refer to them self
+    # we can deal with all procedures the same way as they define all externally relevant stuff in their signature
+    # records on the other hand can not be handled in the same way as fields have to be known during parsing, and those
+    # fields can depend on types that are defined later...
+    for proc in parent.procedures.values():
         proc.elaborated_body = Scope(parent)
         for n in proc.argument_names:
             proc.elaborated_body.names[n.name] = n
@@ -56,28 +137,24 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
         # covered just make sure there is an else (i.e. only check if all branches return or not)
 
 
-def elaborate_statement(parent: Scope, node: ASTNode, returnable: Optional[ASTNodeProcedure]) -> None:
-    expr: ASTNode
-    match node:
-        case ASTNodeStatement():
-            match node.token:
-                case TokenKeyword(keyword=Keyword.VARIABLE):
-                    assert (node.value is not None)
-                    expr = elaborate_declaration(parent, node.value, False, returnable)
-                    expr.target.mut = Mutability.MUTABLE
-                case TokenKeyword(keyword=Keyword.LET):
-                    assert (node.value is not None)
-                    expr = elaborate_declaration(parent, node.value, False, returnable)
-                    expr.target.mut = Mutability.ONCE
-                case TokenKeyword(keyword=Keyword.CONSTANT):
-                    assert (node.value is not None)
-                    expr = elaborate_declaration(parent, node.value, True, returnable)
-                    expr.target.mut = Mutability.CONSTANT
-                case _:
-                    expr = elaborate_expression(parent, node, False, returnable)
-        case _:
-            expr = elaborate_expression(parent, node, False, returnable)
-    parent.nodes.append(expr)
+def elaborate_record(record: Record, parent: Scope, nodes: List[ASTNode]):
+    for node in nodes:
+        if not isinstance(node, ASTNodeStatement):
+            raise ElaborationError.from_type(ElaborationErrorType.NOT_A_DECLARATION, node.token.location.whole_line())
+        assert node.child is not None
+        match node.token:
+            case TokenKeyword(keyword=Keyword.VARIABLE):
+                n = elaborate_name_and_type(parent, node.child)
+                n.mut = Mutability.MUTABLE
+                record.fields[n.name] = n
+            case TokenKeyword(keyword=Keyword.LET):
+                n = elaborate_name_and_type(parent, node.child)
+                n.mut = Mutability.ONCE
+                record.fields[n.name] = n
+            case TokenKeyword(keyword=Keyword.CONSTANT):
+                raise NotImplementedError()
+            case _:
+                raise ElaborationError.from_type(ElaborationErrorType.NOT_A_DECLARATION, node.token.location.whole_line())
 
 
 def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnable: Optional[ASTNodeProcedure]
@@ -89,29 +166,54 @@ def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnab
         raise ElaborationError.from_type(ElaborationErrorType.NO_ASSIGNMENT_DECLARATION,
                                          node.token.location.whole_line())
     n = elaborate_name_and_type(parent, node.left)
-    e = elaborate_expression(parent, node.right, constant, returnable)
+    e = elaborate_expression(parent, node.right, constant, returnable, direct_assignment=True)
 
-    if parent.type_table.get(e.type).info.group == TypeGroup.NO_VALUE:
+    e_type = parent.type_table.get(e.type)
+
+    if e_type.info.group == TypeGroup.NO_VALUE:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_VALUE, node.token.location.whole_line())
 
     if not narrow_type(parent.type_table, n.type, e.type):
         raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_DECLARATION, node.token.location.whole_line(),
                                      parent.type_table.get(n.type), parent.type_table.get(e.type))
     parent.names[n.name] = n
+
+    if isinstance(e, ASTNodeProcedure):
+        if constant:
+            parent.procedures[n] = e
+        else:
+            uid = parent.unique_indexer.next()
+            str_name = f"[anonymous_procedure_{uid}]"
+            name = Name(
+                uid,
+                str_name,
+                e.token.location,
+                e.type,
+                parent.type_table,
+                Mutability.CONSTANT,
+            )
+            parent.names[str_name] = name
+            parent.procedures[name] = e
+            type_id = e.type
+            e = ASTNodeValue(TokenName(e.token.location, str_name))
+            e.type = type_id
+
     new_node = ASTNodeAssignment(node.token, node, n, e)
     new_node.type = n.type
     return new_node
 
 
 def elaborate_name_and_type(parent: Scope, node: ASTNode) -> Name:
+    """parent must be const (only use it for lookup and name index generation
+    if you need to change this make sure you do not break elaborate_record (which uses it's parent scope)"""
     if isinstance(node, ASTNodeBinary) and node.token.op == Operator.COLON:
         if not (isinstance(node.left, ASTNodeValue) and isinstance(node.left.token, TokenName)):
             raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
                                              node.token.location.whole_line())
-        return Name(parent.name_index.next(), node.left.token.name, node.token.location.whole_line(),
+        return Name(parent.unique_indexer.next(), node.left.token.name, node.token.location.whole_line(),
                     elaborate_type(parent, node.right), parent.type_table)
     elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenName):
-        return Name(parent.name_index.next(), node.token.name, node.token.location.whole_line(),
+        return Name(parent.unique_indexer.next(), node.token.name, node.token.location.whole_line(),
                     parent.type_table.new(Type()), parent.type_table)
     else:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION, node.token.location.whole_line())
@@ -149,8 +251,8 @@ def is_numeric(type: Type) -> bool:
 def is_integer(type: Type) -> bool:
     return type.info.group in (TypeGroup.INT, TypeGroup.UINT)
 
-def check_assignable(node: ASTNode, parent: Scope) -> MemoryLocation | Name:
-    """ensure that is indeed assignable"""
+def check_assignable(node: ASTNode, parent: Scope):
+    """ensure that is indeed assignable, raises ElaborationError"""
     current_node = node
     last_mutable: Optional[bool] = None
     while True:
@@ -168,21 +270,58 @@ def check_assignable(node: ASTNode, parent: Scope) -> MemoryLocation | Name:
                     raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
                                                      nt.location.whole_line())
 
-                return MemoryLocation(node.type, node, Mutability.MUTABLE)
-            case ASTNodeUnaryRight(token=top) if isinstance(top, TokenOperator) and top.op == Operator.POINTER:
+                return
+            case ASTNodeUnaryRight(token=top) if top.op == Operator.POINTER:
                 child_type = parent.type_table.get(current_node.child.type)
                 assert isinstance(child_type, TypePointer)
                 last_mutable = child_type.target_mutable
                 current_node = current_node.child
+            case ASTNodeBinary(token=dot) if dot.op == Operator.DOT:
+                lhs_type = parent.type_table.get(current_node.left.type)
+                if isinstance(lhs_type, TypePointer):
+                    if not lhs_type.target_mutable:
+                        raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
+                                                         node.token.location.whole_line())
+                    lhs_type = parent.type_table.get(lhs_type.target_type)
+                assert isinstance(lhs_type, TypeRecordInstance) # or isinstance(lhs_type, TypePointer) and
+                assert isinstance(current_node.right, ASTNodeValue) and isinstance(current_node.right.token, TokenName)
+                if (m := lhs_type.record.fields[current_node.right.token.name].mut) != Mutability.MUTABLE:
+                    raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
+                                                     node.token.location.whole_line(),
+                                                     m)
+                current_node = current_node.left
             case _:
                 raise ElaborationError.from_type(ElaborationErrorType.UN_ASSIGNABLE, node.token.location)
 
+def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
+    assert node.token.op == Operator.DOT
+    lhs = elaborate_expression(parent, node.left, False, None)
+    lhs_type = parent.type_table.get(lhs.type)
+    if isinstance(lhs_type, TypePointer):
+        lhs_type = parent.type_table.get(lhs_type.target_type)
+    if not isinstance(lhs_type, TypeRecordInstance):
+        raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_RECORD, lhs.token.location)
+    if not (isinstance(node.right, ASTNodeValue) and isinstance(node.right.token, TokenName)):
+        raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_FIELD_NAME, node.right.token.location)
+    name = node.right.token.name
+    if (field_name := lhs_type.record.fields.get(name)) is not None:
+        node.type = field_name.type
+    else:
+        raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_FIELD_NAME, node.right.token.location)
+    return node
+
 def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
-                         returnable: Optional[ASTNodeProcedure]) -> ASTNode:
+                         returnable: Optional[ASTNodeProcedure], direct_assignment: bool = False) -> ASTNode:
+    # direct_assignment shall be true when expression is the top most node to the right of an assignment
+    # if direct_assignment is true anonymous records get a dummy name so that they get allocated on the stack later
+    # anonymous procedures are also given a dummy name and are replaced with them
     match node:
+        case ASTNodeBinary(token=tok) if tok.op == Operator.DOT:
+            return resolve_field(parent, node)
         case ASTNodeBinary():
             node.left = elaborate_expression(parent, node.left, constant, returnable)
-            node.right = elaborate_expression(parent, node.right, constant, returnable)
+            node.right = elaborate_expression(parent, node.right, constant, returnable,
+                                              node.token.op == Operator.ASSIGNMENT)
             lt = parent.type_table.get(node.left.type)
             rt = parent.type_table.get(node.right.type)
             match node.token.op:
@@ -219,7 +358,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     if not (is_integer(lt) and is_integer(rt)):
                         raise JTLTypeError.from_type(JTLTypeErrorType.SHIFT_ON_NON_INTEGER,
                                                      node.token.location.whole_line(), str(node.token.op))
-                    node.type = lt
+                    node.type = node.left.type
                     return node
                 case Operator.EQUAL | Operator.NOTEQUAL:
                     node.type = parent.type_table.new(Type(TypeType.BOOL))
@@ -239,7 +378,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                             raise JTLTypeError.from_type(JTLTypeErrorType.POINTER_ARITHMETIC,
                                                          node.left.token.location.whole_line(),
                                                          lt.target_type, rt.target_type)
-                    if lt.info.group in {TypeGroup.COMPOUND, TypeGroup.POINTER, TypeGroup.TYPE}:
+                    if lt.info.group in {TypeGroup.RECORD, TypeGroup.POINTER, TypeGroup.TYPE}:
                         # TODO compound aka strings, types, procedures
                         raise NotImplementedError()
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.token.location.whole_line(),
@@ -261,20 +400,35 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         return node
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.token.location.whole_line(),
                                                  node.token.op, at, bt)
-                case Operator.DOT:
-                    raise NotImplementedError()
                 case Operator.COLON:
                     raise NotImplementedError() # FIXME: is this even valid anywhere?
                 case Operator.ASSIGNMENT:
-                    ml = check_assignable(node.left, parent)
-                    if not narrow_type(parent.type_table, ml.type, node.right.type):
+                    check_assignable(node.left, parent)
+                    if not narrow_type(parent.type_table, node.left.type, node.right.type):
                         raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_ASSIGNMENT,
                                                      node.token.location.whole_line(),
                                                      parent.type_table.get(node.right.type),
                                                      lt)
 
-                    assign = ASTNodeAssignment(node.token, node, ml, node.right)
-                    assign.type = ml.type
+                    if isinstance(node.right, ASTNodeProcedure):
+                        uid = parent.unique_indexer.next()
+                        str_name = f"[anonymous_procedure_{uid}]"
+                        name = Name(
+                            uid,
+                            str_name,
+                            node.right.token.location,
+                            node.right.type,
+                            parent.type_table,
+                            Mutability.CONSTANT,
+                        )
+                        parent.names[str_name] = name
+                        parent.procedures[name] = node.right
+                        type_id = node.right.type
+                        node.right = ASTNodeValue(TokenName(node.right.token.location, str_name))
+                        node.right.type = type_id
+
+                    assign = ASTNodeAssignment(node.token, node, node.left, node.right)
+                    assign.type = node.type
                     return assign
                 case _:
                     raise RuntimeError(f"Unexpected Operator {node}")
@@ -318,6 +472,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     raise ElaborationError.from_type(ElaborationErrorType.UNEXPECTED_TYPE_MODIFIER, node.token.location)
                 case Operator.ADDRESS_OFF:
                     # TODO of what can you take an address? Just names or also (some) literals?
+                    # TODO address of record field
+                    operand_type = parent.type_table.get(operand.type)
                     if isinstance(operand, ASTNodeValue) and isinstance(operand.token, TokenName):
                         name_of_target = parent.lookup(operand.token.name)
                         if name_of_target is None:
@@ -326,6 +482,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         node.type = parent.type_table.new(TypePointer(operand.type,
                                                                       name_of_target.mut == Mutability.MUTABLE,
                                                                       parent.type_table))
+                        return node
+                    elif isinstance(operand_type, TypeRecordInstance):
+                        node.type = parent.type_table.new(TypePointer(operand.type, True, parent.type_table))
+                        return node
+                    elif isinstance(operand, ASTNodeBinary) and operand.token.op == Operator.DOT:
+                        # TODO what about constants in records etc.
+                        node.type = parent.type_table.new(TypePointer(operand.type, True, parent.type_table))
                         return node
                     else:
                         raise ElaborationError.from_type(ElaborationErrorType.ADDRESS_OF_UNASSIGNED,
@@ -351,14 +514,14 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 if returnable is None:
                     raise ElaborationError.from_type(ElaborationErrorType.CAN_NOT_RETURN_FROM_HERE, node.token.location)
 
-                assert node.value is not None
-                node.value = elaborate_expression(parent, node.value, constant, returnable)
+                assert node.child is not None
+                node.child = elaborate_expression(parent, node.child, constant, returnable)
                 rt = parent.type_table.get(returnable.type)
                 assert isinstance(rt, TypeProcedure)
-                if not narrow_type(parent.type_table, rt.return_type, node.value.type):
+                if not narrow_type(parent.type_table, rt.return_type, node.child.type):
                     raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_RETURN,
                                                  node.token.location.whole_line(),
-                                                 parent.type_table.get(node.value.type),
+                                                 parent.type_table.get(node.child.type),
                                                  parent.type_table.get(rt.return_type))
 
                 node.type = parent.type_table.new(Type(TypeType.RETURNS))
@@ -444,99 +607,139 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             else:
                 return_type = parent.type_table.new(Type(TypeType.NO_VALUE))
 
-            parent.delayed_elaborate.append(node)
-
             node.argument_names = arguments
             node.type = parent.type_table.new(TypeProcedure(list(map(lambda x: x.type, arguments)), return_type,
                                                             parent.type_table))
 
-            return node
+            if not direct_assignment:
+                uid = parent.unique_indexer.next()
+                name = Name(
+                    uid,
+                    f"[anonymous_procedure_{uid}]",
+                    node.token.location,
+                    node.type,
+                    parent.type_table,
+                    Mutability.CONSTANT,
+                )
+                parent.names[f"[anonymous_procedure_{uid}]"] = name
+                parent.procedures[name] = node
+            else:
+                return node
         case ASTNodeScope():
             # TODO maybe scopes can return something
             node.elaborated_body = Scope(parent)
-            elaborate_scope(node.elaborated_body, node.nodes, returnable)
-            if (len(node.elaborated_body.nodes) > 0
-                    and parent.type_table.get(node.elaborated_body.nodes[-1].type).info.group == TypeGroup.RETURNS):
-                node.type = node.elaborated_body.nodes[-1].type
+            elaborate_scope(node.elaborated_body, node.body, returnable)
+            if (len(node.elaborated_body.body) > 0
+                    and parent.type_table.get(node.elaborated_body.body[-1].type).info.group == TypeGroup.RETURNS):
+                node.type = node.elaborated_body.body[-1].type
             else:
                 node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
             return node
-        case ASTNodeTupleLike():
-            if node.parent is not None:
-                # TODO allow more complex situations like module.proc_name() or calling a just defined function
-                if not (isinstance(node.parent, ASTNodeValue) and isinstance(node.parent.token, TokenName)):
-                    raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, node.parent.token.location)
+        case ASTNodeTupleLike(parent=p) if p is not None:
+            # This is a procedure call
+            # TODO allow more complex situations like module.proc_name() or calling a just defined function
+            if not (isinstance(p, ASTNodeValue) and isinstance(p.token, TokenName)):
+                raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, p.token.location)
 
-                if (proc_name := parent.lookup(node.parent.token.name)) is None:
-                    raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_PROC, node.parent.token.location)
+            if (proc_name := parent.lookup(p.token.name)) is None:
+                raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_PROC, p.token.location)
 
-                proc_type = parent.type_table.get(proc_name.type)
+            proc_type = parent.type_table.get(proc_name.type)
+            argument_list: List[int]
 
-                if not isinstance(proc_type, TypeProcedure):
-                    raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, node.parent.token.location)
+            match proc_type:
+                case TypeProcedure():
+                    argument_list = proc_type.arguments
+                    return_type = proc_type.return_type
+                case TypeRecordType():
+                    argument_list = [field_name.type for field_name in proc_type.record.fields.values()]
+                    instance_type = parent.type_table.new(proc_type.to_instance_type())
+                    return_type = instance_type
+                case _:
+                    raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, p.token.location)
 
-                if len(node.children) != len(proc_type.arguments):
-                    raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS,
-                                                     node.token.location.whole_line(),
-                                                     len(proc_type.arguments), len(node.children))
+            if len(node.children) != len(argument_list):
+                raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS,
+                                                 node.token.location.whole_line(),
+                                                 len(argument_list), len(node.children))
 
-                call_arguments = []
-                for i, (n, t) in enumerate(zip(node.children, proc_type.arguments)):
-                    elab = elaborate_expression(parent, n, constant, returnable)
-                    call_arguments.append(elab)
-                    # TODO do we want promotion here?
-                    if not narrow_type(parent.type_table, t, elab.type):
-                        raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE,
-                                                         elab.token.location.whole_line(),
-                                                         i+1,
-                                                         parent.type_table.get(t),
-                                                         parent.type_table.get(elab.type))
-                if parent.parent is None:
-                    raise ElaborationError.from_type(ElaborationErrorType.GLOBAL_CALL, node.token.location.whole_line())
-                call = ASTNodeCall(node.parent.token, proc_name, call_arguments)
+            call_arguments = []
+            for i, (n, t) in enumerate(zip(node.children, argument_list)):
+                elab = elaborate_expression(parent, n, constant, returnable)
+                call_arguments.append(elab)
+                # TODO do we want promotion here?
+                if not narrow_type(parent.type_table, t, elab.type):
+                    raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE,
+                                                     elab.token.location.whole_line(),
+                                                     i + 1,
+                                                     parent.type_table.get(t),
+                                                     parent.type_table.get(elab.type))
+            if parent.parent is None:
+                # FIXME: Global call - why did I disallow this
+                raise ElaborationError.from_type(ElaborationErrorType.GLOBAL_CALL, node.token.location.whole_line())
+            call = ASTNodeCall(p.token, proc_name, call_arguments)
 
-                call.type = proc_type.return_type
-                return call
+            call.type = return_type
+
+            if isinstance(proc_type, TypeRecordType) and not direct_assignment:
+                # TODO this is probably broken when records are nested...
+                uid = parent.unique_indexer.next()
+                name = Name(
+                    uid,
+                    f"[anonymous_record_{uid}]",
+                    node.token.location,
+                    instance_type,
+                    parent.type_table,
+                    Mutability.MUTABLE,  # TODO is this right
+                )
+                parent.names[f"[anonymous_record_{uid}]"] = name
+                assignment = ASTNodeAssignment(node.token,
+                                               ASTNodeBinary(
+                                                   TokenOperator(node.token.location, Operator.ASSIGNMENT),
+                                                   ASTNode(node.token),
+                                                   ASTNode(node.token)),
+                                               name,
+                                               call)
+                assignment.type = call.type
+                return assignment
+            return call
+
+        case ASTNodeTupleLike(token=tok_kw) if isinstance(tok_kw, TokenKeyword) and tok_kw.keyword == Keyword.CAST:
+            if len(node.children) != 2:
+                raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
+                                                 node.token.location.whole_line(), len(node.children))
+            target_type = elaborate_type(parent, node.children[0])
+            source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
+            if can_cast(parent.type_table, target_type, source_expr.type):
+                rv = ASTNodeCast(tok_kw, source_expr)
+                rv.type = target_type
+                return rv
             else:
-                match node.token:
-                    case TokenKeyword(keyword=Keyword.CAST):
-                        # TODO allow reinterpret argument? (or just add a reinterpret_cast keyword)
-                        if len(node.children) != 2:
-                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
-                                                             node.token.location.whole_line(), len(node.children))
-                        target_type = elaborate_type(parent, node.children[0])
-                        source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
-                        if can_cast(parent.type_table, target_type, source_expr.type):
-                            rv = ASTNodeCast(node.token, source_expr)
-                            rv.type = target_type
-                            return rv
-                        else:
-                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE,
-                                                             node.token.location.whole_line(),
-                                                             parent.type_table.get(source_expr.type),
-                                                             parent.type_table.get(target_type))
-                    case TokenKeyword(keyword=Keyword.TRANSMUTE):
-                        if len(node.children) != 2:
-                            raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
-                                                             node.token.location.whole_line(), len(node.children))
-                        target_type = elaborate_type(parent, node.children[0])
-                        source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
-                        source_type = parent.type_table.get(source_expr.type)
-                        # TODO if this is handled better later new checks for all the type groups have to be considered
-                        if source_type.info.size is None:
-                            raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_UNRESOLVED_SIZE,
-                                                             node.token.location.whole_line())
-                        target_type_t = parent.type_table.get(target_type)
-                        if source_type.info.size != target_type_t.info.size:
-                            raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_SIZE_MISSMATCH,
-                                                         node.token.location.whole_line(), target_type_t.info.size,
-                                                         source_type.info.size)
-                        rv_transmute = ASTNodeTransmute(node.token, source_expr)
-                        rv_transmute.type = target_type
-                        return rv_transmute
-                    case _:
-                        # TODO Tuples, Arrays, Records, (Dicts?)
-                        raise NotImplementedError()
+                raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE,
+                                                 node.token.location.whole_line(),
+                                                 parent.type_table.get(source_expr.type),
+                                                 parent.type_table.get(target_type))
+        case ASTNodeTupleLike(token=tok_kw) if isinstance(tok_kw, TokenKeyword) and tok_kw.keyword == Keyword.TRANSMUTE:
+            if len(node.children) != 2:
+                raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS_CAST,
+                                                 node.token.location.whole_line(), len(node.children))
+            target_type = elaborate_type(parent, node.children[0])
+            source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
+            source_type = parent.type_table.get(source_expr.type)
+            # TODO if this is handled better later new checks for all the type groups have to be considered
+            if source_type.info.size is None:
+                raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_UNRESOLVED_SIZE,
+                                                 node.token.location.whole_line())
+            target_type_t = parent.type_table.get(target_type)
+            if source_type.info.size != target_type_t.info.size:
+                raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_SIZE_MISSMATCH,
+                                             node.token.location.whole_line(), target_type_t.info.size,
+                                             source_type.info.size)
+            rv_transmute = ASTNodeTransmute(tok_kw, source_expr)
+            rv_transmute.type = target_type
+            return rv_transmute
+        case ASTNodeRecord():
+            raise NotImplementedError("Inline records are not supported yet")
         case _:
             raise RuntimeError(f"Bad ast node in expression {node}")
     raise RuntimeError("This is here so mypy is happy (I am probably missing a return statement somewhere)")

@@ -58,6 +58,7 @@ class ParserErrorType(Enum):
     EXPECTED_BRACKET = ("Unexpected token", "expected '(' here")
     EXPECTED_RETURN_TYPE = ("Unexpected token", "expected return type here")
     EXPECTED_BODY = ("Unexpected token", "expected procedure body here")
+    EXPECTED_BODY_RECORD = ("Unexpected token", "expected record body here")
     EXPECTED_BODY_WHILE = ("Unexpected token", "expected loop body here")
     EMPTY_TUPLE = ("Expected value", "() is not a valid value")
 
@@ -102,6 +103,11 @@ class ElaborationErrorType(Enum):
     UNEXPECTED_POINTER_MODIFIER = ("Unexpected Operator",
                                    "When specifying a type const must always follow a pointer operator")
     WRITE_TO_CONST_POINTER = ("Assignment Error", "Can not write to const pointer")
+    NOT_A_DECLARATION = ("Syntax error", "All statements in a record must be a declaration")
+    CYCLIC_RECORD = ("Cyclic Record", "This record contains itself")
+    EXPECTED_FIELD_NAME = ("Expected Name", "Expected a field name here")
+    EXPECTED_RECORD = ("Expected Record", "Expected a record here")
+    FIELD_DOES_NOT_EXIST = ("Undeclared Field", "This field does not exist")
 
 @dataclass
 class ElaborationError(JTLError):
