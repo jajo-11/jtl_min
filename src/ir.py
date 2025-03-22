@@ -109,7 +109,8 @@ class IRUnit:
                     return self.variable_stack_register[nn]
                 case ASTNodeBinary(token=tok) if tok.op == Operator.DOT:
                     base = self.l_value_to_ir(l_value.left, scope, instructions)
-                    if isinstance(base.type, IRTypePointer):
+                    base_type = scope.type_table.get(l_value.left.type)
+                    if isinstance(base_type, TypePointer):
                         deref_base = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
                         instructions.append(IRInstLoad(l_value.token.location, deref_base, base))
                         base = deref_base
@@ -122,7 +123,7 @@ class IRUnit:
                 case _:
                     raise RuntimeError(f"Unexpected node in l_value")
 
-    def get_ptr_to_field(self, node: ASTNode, base: Register, scope: Scope, instructions: List[ASTNode]) -> Register:
+    def get_ptr_to_field(self, node: ASTNodeBinary, base: Register, scope: Scope, instructions: List[IRInstruction]) -> Register:
         assert base is not None
         assert isinstance(base, Register)
         assert isinstance(base.type, IRTypePointer) or isinstance(base.type, IRTypeRecord)
@@ -192,10 +193,8 @@ class IRUnit:
                                               op1, op2))
                 return final_result
             case ASTNodeBinary(token=tok) if tok.op == Operator.DOT:
-                if isinstance(node.left, ASTNodeUnaryRight) and node.left.token.op == Operator.POINTER:
-                    base = self.ast_node_to_ir(node.left.child, scope, instructions)
-                else:
-                    base = self.ast_node_to_ir(node.left, scope, instructions)
+                base = self.ast_node_to_ir(node.left, scope, instructions)
+                assert isinstance(base, Register)
                 ptr_dest = self.get_ptr_to_field(node, base, scope, instructions)
                 if isinstance(self.type_table.get(node.type), TypeRecordInstance):
                     return ptr_dest
@@ -224,20 +223,17 @@ class IRUnit:
                     assert isinstance(node.child.token, TokenName)
                     address_name = scope.lookup(node.child.token.name)
                     assert address_name is not None
-                    rv = self.variable_stack_register[address_name]
+                    return self.variable_stack_register[address_name]
                 elif isinstance(node.child, ASTNodeAssignment):
                     _ = self.ast_node_to_ir(node.child, scope, instructions)
                     assert isinstance(node.child.target, Name)
-                    rv = self.variable_stack_register[node.child.target]
+                    return self.variable_stack_register[node.child.target]
                 elif isinstance(node.child, ASTNodeBinary) and node.child.token.op == Operator.DOT:
                     base = self.ast_node_to_ir(node.child.left, scope, instructions)
-                    ptr_dest = self.get_ptr_to_field(node.child, base, scope, instructions)
-                    rv = ptr_dest
+                    assert isinstance(base, Register)
+                    return self.get_ptr_to_field(node.child, base, scope, instructions)
                 else:
                     raise RuntimeError("Compiler Error can not take address of this")
-                rv = copy(rv)
-                rv.type = IRTypePointer(PLATFORM_POINTER_SIZE)
-                return rv
             case ASTNodeUnary():
                 op1 = self.ast_node_to_ir(node.child, scope, instructions)
                 assert op1 is not None
@@ -278,13 +274,9 @@ class IRUnit:
                     dest = self.l_value_to_ir(node.target, scope, instructions)
                     assert value is not None
                     assert isinstance(dest, Register)
-                    if self.type_table.get(node.expression.type).info.group == TypeGroup.RECORD:
-                        instructions.append(IRInstMemcpy(node.token.location, dest, value, value.type.size))
-                    elif isinstance(self.type_table.get(node.expression.type), TypePointer):
-                        # FIXME: This feels very hacky (type of "register" for stack variable is that of its content) The register name is a pointer on the stack though
-                        value_ptr = copy(value)
-                        value_ptr.type = IRTypePointer(PLATFORM_POINTER_SIZE)
-                        instructions.append(IRInstStore(node.token.location, dest, value_ptr))
+                    expr_type = self.type_table.get(node.expression.type)
+                    if isinstance(expr_type, TypeRecordInstance):
+                        instructions.append(IRInstMemcpy(node.token.location, dest, value, expr_type.record.get_size()))
                     else:
                         instructions.append(IRInstStore(node.token.location, dest, value))
                     return value
@@ -340,7 +332,8 @@ class IRUnit:
                 instructions.append(loop_head)
 
                 cond = self.ast_node_to_ir(node.condition, scope, instructions)
-                instructions.append(IRInstJumpNotZero(node.token.location, cond, loop_end, loop_body))
+                assert cond is not None
+                instructions.append(IRInstJumpNotZero(node.token.location, cond, loop_end.name, loop_body.name))
 
                 instructions.append(loop_body)
                 assert node.elaborated_body is not None
@@ -359,7 +352,7 @@ class IRUnit:
         def __call__(self, scope, instructions):
             pass
 
-    def lower_scope(self, scope: Scope, instructions: List[IRInstruction], funcion_arguments: List[Name]):
+    def lower_scope(self, scope: Scope, instructions: List[IRInstruction], function_arguments: List[Name]):
         for record in scope.record_types.values():
             self.n_temporary += 1
             ir_record = IRRecord(
@@ -391,17 +384,19 @@ class IRUnit:
             if self.type_table.get(o_name.type).info.group in [TypeGroup.PROCEDURE, TypeGroup.TYPE]:
                 continue
             self.n_temporary += 1
-            dest = Register(f"{self.n_temporary}_{s_name}", self.type_to_ir_type_not_none(o_name.type))
+            dest_type = self.type_to_ir_type_not_none(o_name.type)
+            dest = Register(f"{self.n_temporary}_{s_name}", IRTypePointer(PLATFORM_POINTER_SIZE))
             if isinstance(ri := self.type_table.get(o_name.type), TypeRecordInstance):
                 align = ri.record.get_alignment()
             else:
-                align = dest.type.size
-            instructions.append(IRInstAllocate(o_name.declaration_location, dest, dest.type.size, align))
+                align = dest_type.size
+            instructions.append(IRInstAllocate(o_name.declaration_location, dest, dest_type.size, align))
             self.variable_stack_register[o_name] = dest
 
-        for name in funcion_arguments:
+        for name in function_arguments:
             dest = self.variable_stack_register[name]
-            src = Register(f"{name.name}", dest.type)
+            dest_type = self.type_to_ir_type_not_none(name.type)
+            src = Register(f"{name.name}", dest_type)
             if isinstance(dest.type, IRTypeRecord):
                 instructions.append(IRInstMemcpy(name.declaration_location, dest, src, dest.type.size))
             else:

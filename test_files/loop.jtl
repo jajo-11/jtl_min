@@ -3,8 +3,11 @@ const length = 10
 
 while i < length {
     // printf("%d", i)
-    i = i + 1
+    var c = i + 1
+    i = c
 }
+
+// TODO: allocs for the while scope should be done at the top of the scope
 
 /*
 >>>

@@ -131,6 +131,7 @@ class TypeTable:
         return len(self.table) - 1
 
     def get(self, index: int) -> Type:
+        assert isinstance(index, int)
         new_index: Type | int = index
         while isinstance(new_index, int):
             new_index = self.table[new_index]
