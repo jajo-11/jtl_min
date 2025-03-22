@@ -1,6 +1,7 @@
 from typing import Dict, List, TextIO, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from elaboration_types import Name, Record
 from lexer_types import CodeLocation
 
 
@@ -328,7 +329,8 @@ class IRProcedure:
     name: str
     arguments: Dict[str, IRType]
     return_type: Optional[IRType]
-    body: List[IRInstruction]
+    alloc_instructions: List[IRInstruction]
+    instructions: List[IRInstruction]
 
     def __str__(self) -> str:
         return f"@{self.name}"
@@ -338,8 +340,34 @@ class IRProcedure:
         out.write(f"procedure {self.return_type} @{self.name}({args}) ")
         out.write("{\n")
 
-        for inst in self.body:
+        for inst in self.alloc_instructions:
+            out.write(f"    {inst}\n")
+
+        for inst in self.instructions:
             out.write(f"    {inst}\n")
 
         out.write("}\n")
 
+@dataclass
+class IRUnit:
+    procedures: Dict[Name, IRProcedure] = field(default_factory=dict)
+    records: Dict[Record, IRRecord] = field(default_factory=dict)
+    alloc_instructions: List[IRInstruction] = field(default_factory=list)
+    instructions: List[IRInstruction] = field(default_factory=list)
+
+    def write(self, out: TextIO):
+        for record in self.records.values():
+            record.write(out)
+            out.write("\n")
+
+        for procedure in self.procedures.values():
+            procedure.write(out)
+            out.write("\n")
+
+        for instruction in self.alloc_instructions:
+            out.write(str(instruction))
+            out.write("\n")
+
+        for instruction in self.instructions:
+            out.write(str(instruction))
+            out.write("\n")

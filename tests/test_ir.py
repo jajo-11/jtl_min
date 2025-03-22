@@ -3,7 +3,7 @@ import unittest
 from io import StringIO
 
 import elaborate
-from ir import IRUnit
+from ir import IRContext
 from jtl_ast import parse_tokens
 from lexer import lex_file
 
@@ -24,7 +24,8 @@ def eval_and_get_saved_ir(file_name: str) -> (str, str):
     tokens = lex_file("test_file", src)
     exprs = parse_tokens(tokens)
     global_scope = elaborate.elaborate_module(exprs)
-    unit = IRUnit(global_scope)
+    ctx = IRContext(global_scope)
+    unit = ctx.lower_unit()
 
     ir_buffer = io.StringIO()
     unit.write(ir_buffer)

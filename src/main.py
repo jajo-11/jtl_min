@@ -1,6 +1,6 @@
 import sys
 
-from ir import IRUnit
+from ir import IRContext
 from jtl_ast import parse_tokens
 from errors import simple_error
 from lexer import lex_file
@@ -27,5 +27,6 @@ if __name__ == '__main__':
     global_scope = elaborate_module(ast_nodes)
 
     print("Generating IR...")
-    ir = IRUnit(global_scope)
+    ctx = IRContext(global_scope)
+    ir = ctx.lower_unit()
     ir.write(sys.stdout)

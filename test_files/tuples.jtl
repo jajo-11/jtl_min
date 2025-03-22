@@ -1,5 +1,17 @@
-let abc = [1, 2, 3,]
-function(abc, abc)
-function2()
-54 + -rand(0, 1)
-point.len()
+//const print = proc[abi="c"](number: i64) ...
+
+let tuple: (int, int, int) = (1, 2, 3,)
+tuple.len()
+tuple[2] = tuple[1] // error!
+
+let array: [3]i64 = [3, 2, 1]
+array.len()
+array[2] = array[1] // perfectly fine
+
+let inferred_array = [3]i64[2, 33, 444]
+
+/*
+for i in inferred_array {
+    print(i)
+}
+*/
