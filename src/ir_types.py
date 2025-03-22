@@ -145,6 +145,8 @@ class IRInstNotEqual(IRBinaryInstruction):
 
 @dataclass
 class IRInstLessEqual(IRBinaryInstruction):
+    # TODO: For these comparison operators the ir currently shows u64 as type -> that is the resulting type
+    # a better way would be listing the type of the operands
     name: str = "leq"
 
 

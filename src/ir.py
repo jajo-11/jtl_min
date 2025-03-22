@@ -2,7 +2,7 @@ from copy import copy
 from typing import cast, Callable
 
 from ast_types import ASTNode, ASTNodeValue, ASTNodeBinary, ASTNodeUnary, ASTNodeAssignment, ASTNodeUnaryRight, \
-    ASTNodeStatement, ASTNodeCast, ASTNodeTransmute, ASTNodeCall, ASTNodeIf, ASTNodeWhile
+    ASTNodeStatement, ASTNodeCast, ASTNodeTransmute, ASTNodeCall, ASTNodeIf, ASTNodeWhile, ASTNodeScope
 from elaboration_types import Scope, Name, Record
 from ir_types import *
 from lexer_types import TokenNumberLiteral, TokenName, TokenStringLiteral, TokenBoolLiteral, Operator, Keyword, \
@@ -192,7 +192,7 @@ class IRContext:
                 self.add_instruction(op_label)
                 second_condition = self.new_label(node.token.location, str(tok.op) + "_right")
                 phi_label = self.new_label(node.token.location, str(tok.op))
-                if tok.op == Operator.AND:
+                if tok.op == Operator.OR:
                     self.add_instruction(IRInstJumpNotZero(node.token.location, op1, second_condition.name, phi_label.name))
                 else:
                     self.add_instruction(IRInstJumpNotZero(node.token.location, op1, phi_label.name, second_condition.name))
@@ -337,7 +337,51 @@ class IRContext:
                 else:
                     raise RuntimeError("non callable called in ir generation")
             case ASTNodeIf():
-                raise NotImplementedError()
+                return_type = self.type_table.get(node.type)
+                if return_type.info.group == TypeGroup.NO_VALUE:
+                    if_body = self.new_label(node.token.location, "if_body")
+                    if node.else_body is not None:
+                        if_else = self.new_label(node.token.location, "if_else")
+                    if_end = self.new_label(node.token.location, "if_end")
+                    cond = self.ast_node_to_ir(node.condition, scope)
+                    assert cond is not None
+                    self.add_instruction(IRInstJumpNotZero(node.token.location, cond,
+                                                           if_else.name if node.else_body is not None else if_end.name,
+                                                           if_body.name))
+
+                    self.add_instruction(if_body)
+                    # function works if this is false but violates mental model
+                    assert isinstance(node.body, ASTNodeScope)
+                    self.ast_node_to_ir(node.body, scope)
+                    self.add_instruction(IRInstJump(node.token.location, if_end.name))
+                    if node.else_body is not None:
+                        self.add_instruction(if_else)
+                        assert isinstance(node.else_body, ASTNodeScope)
+                        self.ast_node_to_ir(node.else_body, scope)
+                        self.add_instruction(IRInstJump(node.token.location, if_end.name))
+                    self.add_instruction(if_end)
+                    return None
+                else:
+                    assert node.else_body is not None
+                    if_true = self.new_label(node.token.location, "if_true")
+                    if_false = self.new_label(node.token.location, "if_false")
+                    if_end = self.new_label(node.token.location, "if_end")
+                    cond = self.ast_node_to_ir(node.condition, scope)
+                    assert cond is not None
+                    self.add_instruction(IRInstJumpNotZero(node.token.location, cond, if_false.name, if_true.name))
+                    self.add_instruction(if_true)
+                    true_value = self.ast_node_to_ir(node.body, scope)
+                    self.add_instruction(IRInstJump(node.token.location, if_end.name))
+                    self.add_instruction(if_false)
+                    false_value = self.ast_node_to_ir(node.else_body, scope)
+                    self.add_instruction(IRInstJump(node.token.location, if_end.name))
+                    self.add_instruction(if_end)
+                    assert true_value is not None
+                    assert false_value is not None
+                    rv = self.new_temporary(node.type)
+                    self.add_instruction(IRInstPHI(node.token.location, rv, if_true.name, if_false.name, true_value,
+                                                   false_value))
+                    return rv
             case ASTNodeWhile():
                 loop_head = self.new_label(node.token.location, "while_head")
                 loop_body = self.new_label(node.token.location, "while_body")
@@ -355,15 +399,12 @@ class IRContext:
                 self.add_instruction(IRInstJump(node.token.location, loop_head.name))
                 self.add_instruction(loop_end)
                 return None
+            case ASTNodeScope():
+                assert node.elaborated_body is not None
+                self.lower_scope(node.elaborated_body, [])
+                return None
             case _:
                 raise NotImplementedError()
-
-    class MoveArguments:
-        def __init__(self):
-            pass
-
-        def __call__(self, scope, instructions):
-            pass
 
     def lower_scope(self, scope: Scope, function_arguments: List[Name]):
         for record in scope.record_types.values():
@@ -420,3 +461,5 @@ class IRContext:
 
         for node in scope.body:
             self.ast_node_to_ir(node, scope)
+
+        return None
