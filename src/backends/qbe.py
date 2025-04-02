@@ -121,7 +121,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
                                f"mul {qbe_value(inst.op1)}, {qbe_value(inst.op2)}\n")
             case IRInstNegative():
-                out_file.write(f"   %{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
+                out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
                                f"neg {qbe_value(inst.op1)}\n")
             case IRInstOrBitwise():
                 assert is_integer(inst.dest.type)
@@ -224,7 +224,8 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 out_file.write(")\n")
             case IRInstAllocate():
                 assert inst.alignment in [4, 8, 16]
-                out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} alloc{inst.alignment} {inst.size}\n")
+                out_file.write(
+                    f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} alloc{inst.alignment} {inst.size}\n")
             case IRInstStore():
                 out_file.write(
                     f"   store{ir_type_to_qbe(inst.source.type)} {qbe_value(inst.source)}, {qbe_value(inst.dest)}\n")
@@ -252,6 +253,14 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                         raise NotImplementedError()
             case IRInstMemcpy():
                 out_file.write(f"   blit {qbe_value(inst.src)}, {qbe_value(inst.dest)}, {inst.size}\n")
+            case IRInstGetElementPointer():
+                type_char = ir_type_to_qbe(inst.dest.type)
+                out_file.write(
+                    f"   %reg.0.{inst.dest.name} ={type_char} mul {qbe_value(inst.element)}, {inst.element_size}\n")
+                out_file.write(
+                    f"   %reg.1.{inst.dest.name} ={type_char} add %reg.0.{inst.dest.name}, {inst.field_offset}\n")
+                out_file.write(
+                    f"   %reg.{inst.dest.name} ={type_char} add {qbe_value(inst.base)}, %reg.1.{inst.dest.name}\n")
             case _:
                 raise NotImplementedError(f"No handler for {inst}")
 

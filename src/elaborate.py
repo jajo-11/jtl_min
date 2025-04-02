@@ -183,7 +183,7 @@ def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnab
             parent.procedures[n] = e
         else:
             uid = parent.unique_indexer.next()
-            str_name = f"[anonymous_procedure_{uid}]"
+            str_name = f"anonymous_procedure_{uid}"
             name = Name(
                 uid,
                 str_name,
@@ -412,7 +412,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
 
                     if isinstance(node.right, ASTNodeProcedure):
                         uid = parent.unique_indexer.next()
-                        str_name = f"[anonymous_procedure_{uid}]"
+                        str_name = f"anonymous_procedure_{uid}"
                         name = Name(
                             uid,
                             str_name,
@@ -615,13 +615,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 uid = parent.unique_indexer.next()
                 name = Name(
                     uid,
-                    f"[anonymous_procedure_{uid}]",
+                    f"anonymous_procedure_{uid}",
                     node.token.location,
                     node.type,
                     parent.type_table,
                     Mutability.CONSTANT,
                 )
-                parent.names[f"[anonymous_procedure_{uid}]"] = name
+                parent.names[f"anonymous_procedure_{uid}"] = name
                 parent.procedures[name] = node
             else:
                 return node
@@ -686,13 +686,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 uid = parent.unique_indexer.next()
                 name = Name(
                     uid,
-                    f"[anonymous_record_{uid}]",
+                    f"anonymous_record_{uid}",
                     node.token.location,
                     instance_type,
                     parent.type_table,
                     Mutability.MUTABLE,  # TODO is this right
                 )
-                parent.names[f"[anonymous_record_{uid}]"] = name
+                parent.names[f"anonymous_record_{uid}"] = name
                 assignment = ASTNodeAssignment(node.token,
                                                ASTNodeBinary(
                                                    TokenOperator(node.token.location, Operator.ASSIGNMENT),

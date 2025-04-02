@@ -30,6 +30,7 @@ const main = proc() -> int {
     var a = LinkedList(1, cast(^LinkedList, 0))
     var bb = LinkedList(2, @a)
     a.next = @bb
+    return 1
 }
 
 /*
@@ -40,7 +41,7 @@ procedure i32 @main() {
     %4_vec = alloc 12 align 4
     %5_vec_copy = alloc 12 align 4
     %6_b = alloc 4 align 4
-    %7_[anonymous_record_15] = alloc 12 align 4
+    %7_anonymous_record_15 = alloc 12 align 4
     %8_vec2 = alloc 8 align 8
     %9_y = alloc 8 align 8
     %10_a = alloc 16 align 8
@@ -58,13 +59,13 @@ procedure i32 @main() {
     %17 = load i32 %6_b
     %18 = get_ptr %4_vec[0].1
     store i32 %17 into %18
-    %19 = get_ptr %7_[anonymous_record_15][0].0
+    %19 = get_ptr %7_anonymous_record_15[0].0
     store i32 3 into %19
-    %20 = get_ptr %7_[anonymous_record_15][0].1
+    %20 = get_ptr %7_anonymous_record_15[0].1
     store i32 2 into %20
-    %21 = get_ptr %7_[anonymous_record_15][0].2
+    %21 = get_ptr %7_anonymous_record_15[0].2
     store i32 1 into %21
-    store ptr %7_[anonymous_record_15] into %8_vec2
+    store ptr %7_anonymous_record_15 into %8_vec2
     %22 = load ptr %8_vec2
     %23 = get_ptr %22[0].1
     store ptr %23 into %9_y
@@ -85,6 +86,7 @@ procedure i32 @main() {
     store ptr %10_a into %32
     %33 = get_ptr %10_a[0].1
     store ptr %11_bb into %33
+    return 1
 }
 
 <<<

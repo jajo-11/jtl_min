@@ -274,6 +274,7 @@ class IRInstGetElementPointer(IRInstruction):
     dest: Register
     base: Register
     element: Register | Immediate
+    element_size: int
     # this is a bit redundant but having the offset is handy in qbe and llvm only needs the field_nr
     field_offset: int
     field_nr: int

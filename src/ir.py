@@ -155,6 +155,7 @@ class IRContext:
             ptr_dest,
             base,
             Immediate(0, IRTypeUInt(PLATFORM_POINTER_SIZE)),
+            lt.record.get_size(),
             offset,
             field_nr
         ))
@@ -290,6 +291,7 @@ class IRContext:
                         dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
                         self.add_instruction(IRInstGetElementPointer(node.token.location, dest, dest_base,
                                                                      Immediate(0, IRTypeUInt(PLATFORM_POINTER_SIZE)),
+                                                                     record.get_size(),
                                                                      field, i))
                         self.add_instruction(IRInstStore(node.token.location, dest, reg))
                     return dest_base
