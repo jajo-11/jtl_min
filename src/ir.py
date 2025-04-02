@@ -30,6 +30,7 @@ BinaryOpToInstruction: Dict[Operator, type[IRBinaryInstruction]] = {
 
 no_location = CodeLocation("phony", 0, 0, 0, "")
 
+
 class IRContext:
     def __init__(self, global_scope: Scope):
         assert global_scope.parent is None, "IRUnit expects global scope as argument"
@@ -91,7 +92,7 @@ class IRContext:
 
     def type_to_ir_type_not_none(self, tt: int) -> IRType:
         rv = self.type_to_ir_type(tt)
-        assert(rv is not None)
+        assert (rv is not None)
         return rv
 
     def new_temporary(self, t: IRType | int) -> Register:
@@ -193,9 +194,11 @@ class IRContext:
                 second_condition = self.new_label(node.token.location, str(tok.op) + "_right")
                 phi_label = self.new_label(node.token.location, str(tok.op))
                 if tok.op == Operator.OR:
-                    self.add_instruction(IRInstJumpNotZero(node.token.location, op1, second_condition.name, phi_label.name))
+                    self.add_instruction(
+                        IRInstJumpNotZero(node.token.location, op1, second_condition.name, phi_label.name))
                 else:
-                    self.add_instruction(IRInstJumpNotZero(node.token.location, op1, phi_label.name, second_condition.name))
+                    self.add_instruction(
+                        IRInstJumpNotZero(node.token.location, op1, phi_label.name, second_condition.name))
                 self.add_instruction(second_condition)
                 op2 = self.ast_node_to_ir(node.right, scope)
                 assert op2 is not None
@@ -203,7 +206,7 @@ class IRContext:
                 self.add_instruction(phi_label)
                 final_result = self.new_temporary(node.type)
                 self.add_instruction(IRInstPHI(node.token.location, final_result, op_label.name, second_condition.name,
-                                              op1, op2))
+                                               op1, op2))
                 return final_result
             case ASTNodeBinary(token=tok) if tok.op == Operator.DOT:
                 base = self.ast_node_to_ir(node.left, scope)
@@ -253,7 +256,9 @@ class IRContext:
                 match node.token.op:
                     case Operator.BITWISE_NOT:
                         dest = self.new_temporary(node.type)
-                        self.add_instruction(IRInstNotBitwise(node.token.location, dest, op1))
+                        assert isinstance(dest.type, (IRTypeInt, IRTypeUInt))
+                        self.add_instruction(IRInstXor(node.token.location, dest, op1,
+                                                       Immediate(-1, op1.type)))
                         return dest
                     case Operator.MINUS:
                         dest = self.new_temporary(node.type)
@@ -261,6 +266,11 @@ class IRContext:
                         return dest
                     case Operator.PLUS:
                         return op1
+                    case Operator.NOT:
+                        dest = self.new_temporary(node.type)
+                        self.add_instruction(IRInstEqual(node.token.location, dest, op1,
+                                                         Immediate(0, op1.type)))
+                        return dest
                     case _:
                         raise NotImplementedError()
             case ASTNodeUnaryRight(token=tok) if tok.op == Operator.POINTER:
@@ -271,15 +281,16 @@ class IRContext:
                 self.add_instruction(IRInstLoad(node.token.location, dest, op1))
                 return dest
             case ASTNodeAssignment():
-                if isinstance(node.expression, ASTNodeCall) and (record := scope.lookup_record(node.expression.procedure)) is not None:
+                if isinstance(node.expression, ASTNodeCall) and (
+                        record := scope.lookup_record(node.expression.procedure)) is not None:
                     argument_registers = [self.ast_node_to_ir(a, scope) for a in node.expression.arguments]
                     dest_base = self.l_value_to_ir(node.target, scope)
                     for i, (reg, field) in enumerate(zip(argument_registers, record.get_offsets().values())):
                         assert reg is not None
                         dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
                         self.add_instruction(IRInstGetElementPointer(node.token.location, dest, dest_base,
-                                                                    Immediate(0, IRTypeUInt(PLATFORM_POINTER_SIZE)),
-                                                                    field, i))
+                                                                     Immediate(0, IRTypeUInt(PLATFORM_POINTER_SIZE)),
+                                                                     field, i))
                         self.add_instruction(IRInstStore(node.token.location, dest, reg))
                     return dest_base
                 else:
@@ -289,7 +300,8 @@ class IRContext:
                     assert isinstance(dest, Register)
                     expr_type = self.type_table.get(node.expression.type)
                     if isinstance(expr_type, TypeRecordInstance):
-                        self.add_instruction(IRInstMemcpy(node.token.location, dest, value, expr_type.record.get_size()))
+                        self.add_instruction(
+                            IRInstMemcpy(node.token.location, dest, value, expr_type.record.get_size()))
                     else:
                         self.add_instruction(IRInstStore(node.token.location, dest, value))
                     return value
@@ -410,9 +422,9 @@ class IRContext:
         for record in scope.record_types.values():
             self.n_temporary += 1
             ir_record = IRRecord(
-                name = f"{self.n_temporary}_{record.name}",
-                fields = [],
-                size = record.get_size(),
+                name=f"{self.n_temporary}_{record.name}",
+                fields=[],
+                size=record.get_size(),
             )
             self.unit.records[record] = ir_record
             ir_record.fields = list(map(lambda x: self.type_to_ir_type_not_none(x.type), record.fields.values()))
@@ -423,12 +435,21 @@ class IRContext:
                                  map(lambda x: self.type_to_ir_type_not_none(x.type), procedure.argument_names)))
             return_type_ast = self.type_table.get(name.type)
             assert isinstance(return_type_ast, TypeProcedure)
+            # FIXME: a more canonical way to declare a function exported
+            if name.name == "main":
+                assert scope.parent is None, "Main must be defined in top scope"
+                proc_name = "main"
+                proc_export = True
+            else:
+                proc_name = f"{self.n_temporary}_{name.name}"
+                proc_export = False
             self.unit.procedures[name] = IRProcedure(
-                name = f"{self.n_temporary}_{name.name}",
-                arguments = arguments,
-                return_type = self.type_to_ir_type(return_type_ast.return_type),
+                name=proc_name,
+                arguments=arguments,
+                return_type=self.type_to_ir_type(return_type_ast.return_type),
                 alloc_instructions=[],
-                instructions= [],
+                instructions=[],
+                export=proc_export
             )
 
         for ir_proc, procedure in zip(self.unit.procedures.values(), scope.procedures.values()):

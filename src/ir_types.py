@@ -107,17 +107,6 @@ class IRInstDiv(IRBinaryInstruction):
 class IRInstRem(IRBinaryInstruction):
     name: str = "rem"
 
-
-@dataclass
-class IRInstAndLogical(IRBinaryInstruction):
-    name: str = "and_logical"
-
-
-@dataclass
-class IRInstOrLogical(IRBinaryInstruction):
-    name: str = "or_logical"
-
-
 @dataclass
 class IRInstAndBitwise(IRBinaryInstruction):
     name: str = "and_bitwise"
@@ -145,7 +134,7 @@ class IRInstNotEqual(IRBinaryInstruction):
 
 @dataclass
 class IRInstLessEqual(IRBinaryInstruction):
-    # TODO: For these comparison operators the ir currently shows u64 as type -> that is the resulting type
+    # TODO: For these comparison operators the ir currently shows u32 as type -> that is the resulting type
     # a better way would be listing the type of the operands
     name: str = "leq"
 
@@ -193,16 +182,6 @@ class IRUnaryInstruction(IRInstruction):
 @dataclass
 class IRInstNegative(IRUnaryInstruction):
     name: str = "neg"
-
-
-@dataclass
-class IRInstNotLogical(IRUnaryInstruction):
-    name: str = "lnot"
-
-
-@dataclass
-class IRInstNotBitwise(IRUnaryInstruction):
-    name: str = "not"
 
 
 @dataclass
@@ -333,6 +312,7 @@ class IRProcedure:
     return_type: Optional[IRType]
     alloc_instructions: List[IRInstruction]
     instructions: List[IRInstruction]
+    export: bool = False
 
     def __str__(self) -> str:
         return f"@{self.name}"

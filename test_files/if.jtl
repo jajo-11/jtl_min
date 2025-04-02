@@ -16,7 +16,7 @@ let no = if sum > 0 and 1 == 1 then sum else -sum
 %11_a = alloc 8 align 8
 store i64 1 into %1_sum
 %5 = load i64 %1_sum
-%6 = leq u64 %5, 1
+%6 = leq u32 %5, 1
 jump_if %6 is zero 4_if_end else 3_if_body
 3_if_body:
 %7 = load i64 %1_sum
@@ -29,14 +29,14 @@ store i64 %12 into %11_a
 jump 4_if_end
 4_if_end:
 %16 = load i64 %1_sum
-%17 = greater u64 %16, 0
+%17 = greater u32 %16, 0
 18_and_left:
 jump_if %17 is zero 20_and else 19_and_right
 19_and_right:
-%21 = eq u64 1, 1
+%21 = eq u32 1, 1
 jump 20_and
 20_and:
-%22 = PHI u64 (%17 from 18_and_left), (%21 from 19_and_right)
+%22 = PHI u32 (%17 from 18_and_left), (%21 from 19_and_right)
 jump_if %22 is zero 14_if_false else 13_if_true
 13_if_true:
 %23 = load i64 %1_sum

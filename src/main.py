@@ -1,5 +1,6 @@
 import sys
 
+from backends.qbe import write_qbe
 from ir import IRContext
 from jtl_ast import parse_tokens
 from errors import simple_error
@@ -30,3 +31,9 @@ if __name__ == '__main__':
     ctx = IRContext(global_scope)
     ir = ctx.lower_unit()
     ir.write(sys.stdout)
+
+    print("Generating QBE IR...")
+    with open("../out/out.qbe", "w", newline="\n") as f:
+        write_qbe(ir, f)
+
+    print("Done")
