@@ -21,7 +21,7 @@ procedure f32 @1_sum(i32 %a, i32 %b) {
     return %8
 }
 
-procedure i32 @2_main() {
+procedure i32 @main() {
     %9_factor = alloc 8 align 8
     store i64 10 into %9_factor
     %10 = call f32 @1_sum(i32 1, i32 2)

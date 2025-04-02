@@ -55,7 +55,7 @@ procedure i32 @3_double_indirection(ptr %value) {
     store i32 %21 into %23
 }
 
-procedure i32 @4_main() {
+procedure i32 @main() {
     %24_a = alloc 4 align 4
     %25_ap = alloc 8 align 8
     %26_b = alloc 4 align 4

@@ -36,7 +36,7 @@ const main = proc() -> int {
 >>>
 &1_Vec3 = type i32, i32, i32
 &2_LinkedList = type i32, ptr
-procedure i32 @3_main() {
+procedure i32 @main() {
     %4_vec = alloc 12 align 4
     %5_vec_copy = alloc 12 align 4
     %6_b = alloc 4 align 4

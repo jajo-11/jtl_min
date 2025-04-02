@@ -11,7 +11,7 @@ const main = proc() -> int {
 
 /*
 >>>
-procedure i32 @1_main() {
+procedure i32 @main() {
     %2_a = alloc 4 align 4
     %3_a2 = alloc 4 align 4
     %4_a3 = alloc 4 align 4
@@ -41,7 +41,7 @@ procedure i32 @1_main() {
     %22 = xor u32 %19, %21
     store u32 %22 into %8_c
     %23 = load u32 %8_c
-    %24 = not u32 %23
+    %24 = xor u32 %23, -1
     %25 = cast i32 %24
     return %25
 }
