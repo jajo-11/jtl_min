@@ -93,6 +93,7 @@ class ElaborationErrorType(Enum):
     MISSING_TYPE = ("Missing Type", "Procedure arguments need type information")
     CAN_NOT_RETURN_FROM_HERE = ("Unexpected Statement", "Can only return from procedures")
     UNREACHABLE = ("Unreachable Expression", "Procedure returns before this can be executed")
+    MISSING_RETURN = ("Missing Return", "Procedure {} does not return a value")
     WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, expected {}")
     WRONG_NUMBER_OF_ARGUMENTS_CAST = ("Procedure signature missmatch", "cast expects exactly 2 arguments, got {}")
     WRONG_NUMBER_OF_ARGUMENTS_TRANSMUTE = ("Procedure signature missmatch",

@@ -9,7 +9,7 @@ from errors import ElaborationError, ElaborationErrorType, JTLTypeError, JTLType
 
 def elaborate_module(nodes: List[ASTNode]) -> Scope:
     scope = Scope(TypeTable())
-    elaborate_scope(scope, nodes, None)
+    _ = elaborate_scope(scope, nodes, None)
 
     # take literal types whose types could not be inferred and convert them to discrete types
     for i, t in enumerate(scope.type_table.table):
@@ -42,7 +42,8 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
     return scope
 
 
-def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[ASTNodeProcedure]) -> None:
+def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[ASTNodeProcedure]) -> bool:
+    """Returns True if scope ends on a return"""
     non_constant_nodes: List[Tuple[int, ASTNode]] = []
     constant_nodes: List[ASTNodeStatement] = []
     records: List[Tuple[Record, ASTNodeRecord]] = []
@@ -51,7 +52,8 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
 
     # first get all the names of records
     for i, node in enumerate(nodes):
-        if isinstance(node, ASTNodeStatement) and isinstance(node.token, TokenKeyword) and node.token.keyword == Keyword.CONSTANT:
+        if isinstance(node, ASTNodeStatement) and isinstance(node.token,
+                                                             TokenKeyword) and node.token.keyword == Keyword.CONSTANT:
             assert node.child is not None
             if (isinstance(node.child, ASTNodeBinary) and isinstance(node.child.token, TokenOperator)
                 and node.child.token.op == Operator.ASSIGNMENT) and isinstance(node.child.right, ASTNodeRecord):
@@ -121,20 +123,25 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
             case _:
                 parent.body.append(elaborate_expression(parent, node, False, returnable))
 
-        if parent.type_table.get(parent.body[-1].type).info.group == TypeGroup.RETURNS and i != (len(nodes) - 1):
+        last_node_type = parent.type_table.get(parent.body[-1].type)
+        if last_node_type.info.group == TypeGroup.RETURNS and i != (len(nodes) - 1):
             raise ElaborationError.from_type(ElaborationErrorType.UNREACHABLE, nodes[-1].token.location.whole_line())
+        if i == (len(nodes) - 1) and last_node_type.info.group != TypeGroup.RETURNS and returnable is not None:
+            return False
 
     # sixth procedures are elaborated last so that they can refer to them self
     # we can deal with all procedures the same way as they define all externally relevant stuff in their signature
     # records on the other hand can not be handled in the same way as fields have to be known during parsing, and those
     # fields can depend on types that are defined later...
-    for proc in parent.procedures.values():
+    for name, proc in parent.procedures.items():
         proc.elaborated_body = Scope(parent)
         for n in proc.argument_names:
             proc.elaborated_body.names[n.name] = n
-        elaborate_scope(proc.elaborated_body, proc.body, proc)
-        # TODO make sure all paths return (don't overcomplicate if/else evaluation (don't analyze if all conditions are
-        # covered just make sure there is an else (i.e. only check if all branches return or not)
+        if not elaborate_scope(proc.elaborated_body, proc.body, proc) and proc.return_type_expr is not None:
+            raise ElaborationError.from_type(ElaborationErrorType.MISSING_RETURN, proc.token.location.whole_line(),
+                                             name.name)
+
+    return True
 
 
 def elaborate_record(record: Record, parent: Scope, nodes: List[ASTNode]):
@@ -154,7 +161,8 @@ def elaborate_record(record: Record, parent: Scope, nodes: List[ASTNode]):
             case TokenKeyword(keyword=Keyword.CONSTANT):
                 raise NotImplementedError()
             case _:
-                raise ElaborationError.from_type(ElaborationErrorType.NOT_A_DECLARATION, node.token.location.whole_line())
+                raise ElaborationError.from_type(ElaborationErrorType.NOT_A_DECLARATION,
+                                                 node.token.location.whole_line())
 
 
 def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnable: Optional[ASTNodeProcedure]
@@ -216,7 +224,8 @@ def elaborate_name_and_type(parent: Scope, node: ASTNode) -> Name:
         return Name(parent.unique_indexer.next(), node.token.name, node.token.location.whole_line(),
                     parent.type_table.new(Type()), parent.type_table)
     else:
-        raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION, node.token.location.whole_line())
+        raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
+                                         node.token.location.whole_line())
 
 
 def elaborate_type(parent: Scope, node: ASTNode) -> int:
@@ -248,8 +257,10 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
 def is_numeric(type: Type) -> bool:
     return type.info.group in (TypeGroup.INT, TypeGroup.FLOAT, TypeGroup.UINT)
 
+
 def is_integer(type: Type) -> bool:
     return type.info.group in (TypeGroup.INT, TypeGroup.UINT)
+
 
 def check_assignable(node: ASTNode, parent: Scope):
     """ensure that is indeed assignable, raises ElaborationError"""
@@ -264,8 +275,8 @@ def check_assignable(node: ASTNode, parent: Scope):
                 if last_mutable is None:
                     if name.mut != Mutability.MUTABLE:
                         raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
-                                                     nt.location.whole_line(),
-                                                     name.mut)
+                                                         nt.location.whole_line(),
+                                                         name.mut)
                 elif not last_mutable:
                     raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
                                                      nt.location.whole_line())
@@ -283,7 +294,7 @@ def check_assignable(node: ASTNode, parent: Scope):
                         raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
                                                          node.token.location.whole_line())
                     lhs_type = parent.type_table.get(lhs_type.target_type)
-                assert isinstance(lhs_type, TypeRecordInstance) # or isinstance(lhs_type, TypePointer) and
+                assert isinstance(lhs_type, TypeRecordInstance)  # or isinstance(lhs_type, TypePointer) and
                 assert isinstance(current_node.right, ASTNodeValue) and isinstance(current_node.right.token, TokenName)
                 if (m := lhs_type.record.fields[current_node.right.token.name].mut) != Mutability.MUTABLE:
                     raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
@@ -292,6 +303,7 @@ def check_assignable(node: ASTNode, parent: Scope):
                 current_node = current_node.left
             case _:
                 raise ElaborationError.from_type(ElaborationErrorType.UN_ASSIGNABLE, node.token.location)
+
 
 def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     assert node.token.op == Operator.DOT
@@ -309,6 +321,7 @@ def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     else:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_FIELD_NAME, node.right.token.location)
     return node
+
 
 def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                          returnable: Optional[ASTNodeProcedure], direct_assignment: bool = False) -> ASTNode:
@@ -401,7 +414,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.token.location.whole_line(),
                                                  node.token.op, at, bt)
                 case Operator.COLON:
-                    raise NotImplementedError() # FIXME: is this even valid anywhere?
+                    raise NotImplementedError()  # FIXME: is this even valid anywhere?
                 case Operator.ASSIGNMENT:
                     check_assignable(node.left, parent)
                     if not narrow_type(parent.type_table, node.left.type, node.right.type):
@@ -583,8 +596,10 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_BOOLEAN_CONDITION, node.condition.token.location,
                                              condition_type)
             node.elaborated_body = Scope(parent)
-            elaborate_scope(node.elaborated_body, node.body, returnable)
-            node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
+            if elaborate_scope(node.elaborated_body, node.body, returnable):
+                node.type = parent.type_table.new(Type(TypeType.RETURNS))
+            else:
+                node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
             return node
         case ASTNodeProcedure():
             arguments = []
@@ -628,10 +643,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
         case ASTNodeScope():
             # TODO maybe scopes can return something
             node.elaborated_body = Scope(parent)
-            elaborate_scope(node.elaborated_body, node.body, returnable)
-            if (len(node.elaborated_body.body) > 0
-                    and parent.type_table.get(node.elaborated_body.body[-1].type).info.group == TypeGroup.RETURNS):
-                node.type = node.elaborated_body.body[-1].type
+            if elaborate_scope(node.elaborated_body, node.body, returnable):
+                node.type = parent.type_table.new(Type(TypeType.RETURNS))
             else:
                 node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
             return node
@@ -729,7 +742,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             # TODO if this is handled better later new checks for all the type groups have to be considered
             if source_type.info.size is None:
                 raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_UNRESOLVED_SIZE,
-                                                 node.token.location.whole_line())
+                                             node.token.location.whole_line())
             target_type_t = parent.type_table.get(target_type)
             if source_type.info.size != target_type_t.info.size:
                 raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_SIZE_MISSMATCH,
@@ -863,6 +876,7 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
 
     raise JTLTypeError.from_type(JTLTypeErrorType.INCOMPATIBLE_TYPE_GROUP, a.token.location.whole_line(), at, bt)
 
+
 castable_type_groups = {
     TypeGroup.INT,
     TypeGroup.UINT,
@@ -871,6 +885,7 @@ castable_type_groups = {
     TypeGroup.SYMBOL,
     TypeGroup.POINTER,
 }
+
 
 def can_cast(type_table: TypeTable, a: int, b: int) -> bool:
     at, bt = type_table.get(a), type_table.get(b)
