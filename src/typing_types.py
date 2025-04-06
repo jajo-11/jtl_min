@@ -195,12 +195,13 @@ class TypePointer(Type):
 
 
 class TypeProcedure(Type):
-    __slots__ = ("info", "arguments", "return_type", "type_table")
+    __slots__ = ("info", "arguments", "return_type", "varargs", "type_table")
 
-    def __init__(self, arguments: List[int], return_type: int, type_table: TypeTable) -> None:
+    def __init__(self, arguments: List[int], return_type: int, varargs: bool, type_table: TypeTable) -> None:
         super().__init__(TypeType.PROCEDURE)
         self.arguments = arguments
         self.return_type = return_type
+        self.varargs = varargs
         self.type_table = type_table
 
     def __str__(self) -> str:

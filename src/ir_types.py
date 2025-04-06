@@ -1,4 +1,4 @@
-from typing import Dict, List, TextIO, Optional
+from typing import Dict, List, TextIO, Optional, Tuple
 from dataclasses import dataclass, field
 
 from elaboration_types import Name, Record
@@ -49,12 +49,13 @@ class Register:
 
 @dataclass
 class Immediate:
-    value: int | float
+    value: int | float | str
     type: IRType
 
     def __str__(self) -> str:
+        if isinstance(self.value, str):
+            return f"@{self.value}"
         return str(self.value)
-
 
 @dataclass
 class IRInstruction:
@@ -311,8 +312,10 @@ class IRProcedure:
     name: str
     arguments: Dict[str, IRType]
     return_type: Optional[IRType]
+    stub: bool
     alloc_instructions: List[IRInstruction]
     instructions: List[IRInstruction]
+    location: CodeLocation
     export: bool = False
 
     def __str__(self) -> str:
@@ -337,6 +340,7 @@ class IRUnit:
     records: Dict[Record, IRRecord] = field(default_factory=dict)
     alloc_instructions: List[IRInstruction] = field(default_factory=list)
     instructions: List[IRInstruction] = field(default_factory=list)
+    data_literals: List[Tuple[str, str]] = field(default_factory=list)
 
     def write(self, out: TextIO):
         for record in self.records.values():
@@ -344,6 +348,8 @@ class IRUnit:
             out.write("\n")
 
         for procedure in self.procedures.values():
+            if procedure.stub:
+                continue
             procedure.write(out)
             out.write("\n")
 
@@ -354,3 +360,6 @@ class IRUnit:
         for instruction in self.instructions:
             out.write(str(instruction))
             out.write("\n")
+
+        for name, data in self.data_literals:
+            out.write(f"data %{name} = \"{data}\"\n")

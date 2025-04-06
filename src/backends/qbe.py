@@ -41,6 +41,8 @@ def qbe_value(value: Register | Immediate) -> str:
     else:
         if isinstance(value.type, IRTypeFloat):
             return f"{ir_type_to_qbe(value.type)}_{value.value}"
+        elif isinstance(value.type, IRTypePointer):
+            return f"$str.{value.value}"
         return str(value.value)
 
 
@@ -77,6 +79,7 @@ def write_comparison(inst: IRBinaryInstruction, op: str, out_file: TextIO):
 
 
 def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
+    out_file.write(f"dbgfile \"{procedure.location.file_name}\"\n")
     return_type = "" if procedure.return_type is None else f"{ir_type_to_qbe(procedure.return_type)} "
     arguments = ", ".join([f"{ir_type_to_qbe(t)} %reg.{n}" for n, t in procedure.arguments.items()])
     if procedure.export:
@@ -87,11 +90,13 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
     out_file.write("@start\n")
 
     for inst in chain(procedure.alloc_instructions, procedure.instructions):
+        if not isinstance(inst, IRInstLabel):
+            out_file.write(f"   dbgloc {inst.location.line}, {inst.location.col}\n")
         match inst:
             case IRInstLabel():
                 out_file.write(f"@label.{inst.name}\n")
             case IRInstJump():
-                out_file.write(f"   jmp @label.{inst.dest}")
+                out_file.write(f"   jmp @label.{inst.dest}\n")
             case IRInstJumpNotZero():
                 out_file.write(f"   jnz {qbe_value(inst.value)}, @label.{inst.not_zero}, @label.{inst.is_zero}\n")
             case IRInstReturn():
@@ -167,8 +172,10 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 write_comparison(inst, "gt", out_file)
             case IRInstCopy():
                 assert not isinstance(inst.op1.type, IRTypeRecord)
+                op = "cast" if isinstance(inst.op1.type, IRTypeFloat) or isinstance(inst.dest.type,
+                                                                                    IRTypeFloat) else "copy"
                 out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
-                               f"cast {qbe_value(inst.op1)}")
+                               f"{op} {qbe_value(inst.op1)}\n")
             case IRInstCast():
                 # TODO missing the extended types not w/l
                 dest_type = ir_type_to_qbe(inst.dest.type)
@@ -264,6 +271,9 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
             case _:
                 raise NotImplementedError(f"No handler for {inst}")
 
+    if procedure.return_type is None and not isinstance(procedure.instructions[-1], IRInstReturn):
+        out_file.write("   ret\n")
+
     out_file.write("}\n")
 
 
@@ -272,6 +282,17 @@ def write_qbe(unit: IRUnit, out_file: TextIO):
         out_file.write(record_to_qbe(record))
         out_file.write("\n")
 
+    if len(unit.records) > 0:
+        out_file.write("\n")
+
+    for name, data in unit.data_literals:
+        out_file.write(f"data $str.{name} = {{ b \"{data}\", b 0 }}")
+
+    if len(unit.data_literals) > 0:
+        out_file.write("\n")
+
     for procedure in unit.procedures.values():
+        if procedure.stub:
+            continue
         procedure_to_qbe(procedure, out_file)
         out_file.write("\n")

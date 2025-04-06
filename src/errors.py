@@ -16,6 +16,19 @@ def simple_error(msg: str):
     print(f"Error: {msg}")
 
 
+def get_error_with_line_info(header: str, title: str, location: CodeLocation, err_msg: str, hint: str = "") -> str:
+    msg = "\n"
+    msg += f"[{header}] {title} [{location.file_name}:{location.line + 1}:{location.col}]:\n"
+    line_number_space = " " * (len(str(location.line + 1)) + 2)
+    msg += f"{line_number_space}|\n"
+    msg += f" {location.line + 1} | {location.line_str}\n"
+    msg += f"{line_number_space}| " + " " * location.col + "^" * location.length + "\n"
+    msg += f"{line_number_space}  " + " " * location.col + err_msg + "\n"
+    if len(hint) > 0:
+        msg += f"Hint: {hint}\n"
+    return msg
+
+
 @dataclass
 class JTLError(Exception):
     title: str
@@ -33,7 +46,7 @@ class LexerError(JTLError):
     location: CodeLocation
 
     def __str__(self) -> str:
-        return f"[Lexer Error] {self.title} [{self.location}]:\n{self.message}\n"
+        return get_error_with_line_info("Lexer Error", self.title, self.location, self.message)
 
     @classmethod
     def from_type(cls, type: LexerErrorType, location: CodeLocation) -> "LexerError":
@@ -46,7 +59,7 @@ class ParserErrorType(Enum):
     UNCLOSED_BRACKET = ("Unclosed bracket", "opened here")
     EXPECTED_ATOM = ("Expected value", "expected a value here")
     EXPECTED_OPERATOR = ("Expected operator", "expected some form of operator (compiler error)")
-    UNEXPECTED_TUPLE_TERMINATOR =\
+    UNEXPECTED_TUPLE_TERMINATOR = \
         ("Unexpected token", "Parser did not expect this at the end of tuple (compiler error)")
     UNEXPECTED_THEN = ("Unexpected token", "must follow condition in if expression")
     EXPECTED_CONDITION = ("Expected condition", "must be followed by condition")
@@ -61,6 +74,7 @@ class ParserErrorType(Enum):
     EXPECTED_BODY_RECORD = ("Unexpected token", "expected record body here")
     EXPECTED_BODY_WHILE = ("Unexpected token", "expected loop body here")
     EMPTY_TUPLE = ("Expected value", "() is not a valid value")
+    EXTERNAL_FREESTANDING = ("Unexpected token", "should be followed by 'proc'")
 
 
 @dataclass
@@ -68,7 +82,7 @@ class ParserError(JTLError):
     location: CodeLocation
 
     def __str__(self) -> str:
-        return f"[Parser Error] {self.title} [{self.location}]:\n{self.message}\n"
+        return get_error_with_line_info("Parser Error", self.title, self.location, self.message)
 
     @classmethod
     def from_type(cls, type: ParserErrorType, location: CodeLocation) -> "ParserError":
@@ -94,7 +108,7 @@ class ElaborationErrorType(Enum):
     CAN_NOT_RETURN_FROM_HERE = ("Unexpected Statement", "Can only return from procedures")
     UNREACHABLE = ("Unreachable Expression", "Procedure returns before this can be executed")
     MISSING_RETURN = ("Missing Return", "Procedure {} does not return a value")
-    WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, expected {}")
+    WRONG_NUMBER_OF_ARGUMENTS = ("Procedure signature missmatch", "Expected {} arguments, got {}")
     WRONG_NUMBER_OF_ARGUMENTS_CAST = ("Procedure signature missmatch", "cast expects exactly 2 arguments, got {}")
     WRONG_NUMBER_OF_ARGUMENTS_TRANSMUTE = ("Procedure signature missmatch",
                                            "transmute expects exactly 2 arguments, got {}")
@@ -109,14 +123,20 @@ class ElaborationErrorType(Enum):
     EXPECTED_FIELD_NAME = ("Expected Name", "Expected a field name here")
     EXPECTED_RECORD = ("Expected Record", "Expected a record here")
     FIELD_DOES_NOT_EXIST = ("Undeclared Field", "This field does not exist")
+    EXTERNAL_PROCEDURE_NOT_CONST = ("Assignment Error", "External procedures must be declared constant")
+    VAR_ARGS_NOT_LAST = ("Invalid Declaration", "the varargs argument must always be the last argument")
+    VAR_ARGS_NOT_EXTERNAL = (
+    "Invalid Declaration", "the varargs argument is only valid in external procedures (for now)")
+
 
 @dataclass
 class ElaborationError(JTLError):
     location: CodeLocation
-    args: Tuple[Any]
+    args: Tuple[Any, ...]
 
     def __str__(self) -> str:
-        return f"[Elaboration Error] {self.title} [{self.location}]:\n{self.message.format(*self.args)}\n"
+        return get_error_with_line_info("Elaboration Error", self.title, self.location,
+                                        self.message.format(*self.args))
 
     @classmethod
     def from_type(cls, type: ElaborationErrorType, location: CodeLocation, *args) -> "ElaborationError":
@@ -145,9 +165,9 @@ class JTLTypeErrorType(Enum):
     BIT_OPERATOR_SIZE_MISSMATCH = ("Type Error", "Both operands must have the same size in bits")
     BIT_OPERATOR_SIGNED_UNSIGNED = ("Type Error", "Both operands must be either signed or unsigned")
     SHIFT_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
-                                                 " transmute floats if necessary")
+                                          " transmute floats if necessary")
     TRANSMUTE_UNRESOLVED_SIZE = ("Missing Type", "To transmute the size of the source type must be known."
-                                       " (It is currently not enough that the type can be inferred later)")
+                                                 " (It is currently not enough that the type can be inferred later)")
     TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")
     TYPE_MISSMATCH_ASSIGNMENT = ("Type Error", "Can not assign expression of type {} to value of type {}")
 
@@ -155,10 +175,10 @@ class JTLTypeErrorType(Enum):
 @dataclass
 class JTLTypeError(JTLError):
     location: CodeLocation
-    fmt_args: Tuple[Any]
+    fmt_args: Tuple[Any, ...]
 
     def __str__(self) -> str:
-        return f"[Type Error] {self.title} [{self.location}]:\n{self.message.format(*self.fmt_args)}\n"
+        return get_error_with_line_info("Type Error", self.title, self.location, self.message.format(*self.fmt_args))
 
     @classmethod
     def from_type(cls, type: JTLTypeErrorType, location: CodeLocation, *args) -> "JTLTypeError":

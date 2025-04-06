@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Self, Any
 
-from ast_types import ASTNode, ASTNodeProcedure, ASTNodeRecord
+from ast_types import ASTNode, ASTNodeProcedure, ASTNodeRecord, ASTNodeProcedureStub
 from errors import ElaborationError, ElaborationErrorType
 from lexer_types import CodeLocation
 from typing_types import TypeTable, Mutability, TypeGroup, TypeRecordType
@@ -55,6 +55,7 @@ class Scope:
         self.names: Dict[str, Name] = {}
         self.body: List[ASTNode] = []
         self.procedures: Dict[Name, ASTNodeProcedure] = {}
+        self.procedure_stubs: Dict[Name, ASTNodeProcedureStub] = {}
         self.record_types: Dict[Name, Record] = {}
 
     def lookup(self, name: str) -> Optional[Name]:

@@ -182,7 +182,12 @@ class IRContext:
                             self.add_instruction(IRInstLoad(node.token.location, temp, ptr))
                             return temp
                     case TokenStringLiteral():
-                        raise NotImplementedError()
+                        if node.token.zero_terminated:
+                            self.n_temporary += 1
+                            self.unit.data_literals.append((str(self.n_temporary), node.token.content))
+                            return Immediate(str(self.n_temporary), IRTypePointer(PLATFORM_POINTER_SIZE))
+                        else:
+                            raise NotImplementedError()
                     case TokenBoolLiteral():
                         return Immediate(1 if node.token.value else 0, IRTypeUInt(PLATFORM_BOOL_SIZE))
                     case _:
@@ -431,6 +436,22 @@ class IRContext:
             self.unit.records[record] = ir_record
             ir_record.fields = list(map(lambda x: self.type_to_ir_type_not_none(x.type), record.fields.values()))
 
+        for name, procedure_stub in scope.procedure_stubs.items():
+            arguments = dict(zip(map(lambda x: x.name, procedure_stub.argument_names),
+                                 map(lambda x: self.type_to_ir_type_not_none(x.type), procedure_stub.argument_names)))
+            return_type_ast = self.type_table.get(name.type)
+            assert isinstance(return_type_ast, TypeProcedure)
+            self.unit.procedures[name] = IRProcedure(
+                name=name.name,
+                arguments=arguments,
+                location=name.declaration_location,
+                return_type=self.type_to_ir_type(return_type_ast.return_type),
+                stub=True,
+                alloc_instructions=[],
+                instructions=[],
+                export=True
+            )
+
         for name, procedure in scope.procedures.items():
             self.n_temporary += 1
             arguments = dict(zip(map(lambda x: x.name, procedure.argument_names),
@@ -448,15 +469,17 @@ class IRContext:
             self.unit.procedures[name] = IRProcedure(
                 name=proc_name,
                 arguments=arguments,
+                location=name.declaration_location,
                 return_type=self.type_to_ir_type(return_type_ast.return_type),
+                stub=False,
                 alloc_instructions=[],
                 instructions=[],
                 export=proc_export
             )
 
-        for ir_proc, procedure in zip(self.unit.procedures.values(), scope.procedures.values()):
+        for name, procedure in scope.procedures.items():
             assert procedure.elaborated_body is not None
-            self.current_procedures.append(ir_proc)
+            self.current_procedures.append(self.unit.procedures[name])
             self.lower_scope(procedure.elaborated_body, procedure.argument_names)
             self.current_procedures.pop()
 

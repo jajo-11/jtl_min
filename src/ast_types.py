@@ -36,13 +36,23 @@ class ASTNodeValue(ASTNode):
             case TokenName():
                 return f"{self.token.name}"
             case TokenStringLiteral():
-                return f"\"{self.token.content}\""
+                if self.token.zero_terminated:
+                    return f"c\"{self.token.content}\""
+                else:
+                    return f"\"{self.token.content}\""
             case TokenBoolLiteral():
                 return f"{self.token.value}"
             case TokenBuildInType():
                 return f"{self.token.type.value}"
             case _:
                 raise RuntimeError(f"Bad Value {self.token}")
+
+@dataclass(slots=True)
+class ASTNodeVarArgs(ASTNode):
+    token: Token
+
+    def __str__(self) -> str:
+        return "varargs"
 
 @dataclass(slots=True)
 class ASTNodeBinary(ASTNode):
@@ -161,6 +171,7 @@ class ASTNodeProcedure(ASTNode):
     arguments: List[ASTNode]
     return_type_expr: Optional[ASTNode]
     body: List[ASTNode]
+    var_args: bool = False
     argument_names: List["Name"] = field(default_factory=list)
     elaborated_body: Optional["Scope"] = None
 
@@ -170,6 +181,21 @@ class ASTNodeProcedure(ASTNode):
     def __str__(self) -> str:
         body = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return f"(proc [{', '.join(map(str, self.arguments))}] {self.return_type_expr}\n body:\n   {'\n  '.join(body)}\n)"
+
+
+@dataclass(slots=True)
+class ASTNodeProcedureStub(ASTNode):
+    token: TokenKeyword
+    arguments: List[ASTNode]
+    return_type_expr: Optional[ASTNode]
+    argument_names: List["Name"] = field(default_factory=list)
+    var_args: bool = False
+
+    def __repr__(self):
+        return f"{type(self).__name__}<{str(self)}>"
+
+    def __str__(self) -> str:
+        return f"(proc_stub [{', '.join(map(str, self.arguments))}] {self.return_type_expr})\n"
 
 
 @dataclass(slots=True)

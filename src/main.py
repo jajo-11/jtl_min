@@ -1,4 +1,5 @@
 import sys
+import os
 
 from backends.qbe import write_qbe
 from ir import IRContext
@@ -35,5 +36,10 @@ if __name__ == '__main__':
     print("Generating QBE IR...")
     with open("../out/out.qbe", "w", newline="\n") as f:
         write_qbe(ir, f)
+
+    if sys.platform == "linux":
+        os.system("qbe -o ../out/out.s ../out/out.qbe && cc ../out/out.s -o ../out/a.out")
+    else:
+        print("Skipping compiling on non Linux platform")
 
     print("Done")

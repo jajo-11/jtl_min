@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 
-
 @dataclass(slots=True)
 class CodeLocation:
     file_name: str
@@ -48,6 +47,7 @@ class TokenName(Token):
 @dataclass(slots=True)
 class TokenStringLiteral(Token):
     content: str
+    zero_terminated: bool = False
 
 
 class Keyword(Enum):
@@ -70,6 +70,8 @@ class Keyword(Enum):
     TRANSMUTE = "transmute"
     DISTINCT = "distinct"
     DEFER = "defer"
+    EXTERNAL = "external"
+    VARARGS = "varargs"
 
     def __str__(self) -> str:
         return self.value

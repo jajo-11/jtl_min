@@ -1,0 +1,12 @@
+const printf = external proc(msg: ^char, varargs)
+
+const main = proc(argc: int, argv: ^^char) -> int {
+    printf(c"Hello World! %d\n", argc)
+    var i = 0
+    var argv_int = cast(usize, argv)
+    while (i < argc) {
+        printf(c"%s\n", cast(^^char, 8*cast(usize, i)+argv_int)^)
+        i = i + 1
+    }
+    return 0
+}

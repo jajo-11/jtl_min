@@ -52,6 +52,16 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
         else:
             tokens.append(TokenOperator(location(), operator_none))
 
+    def lex_string_literal(col_nr, zero_terminated=False):
+        loc = location()
+        while it.peak()[1] != "\"":
+            col_nr, char = it.next()
+        loc.length = col_nr - loc.col + 2
+        if it.peak()[1] != "\"":
+            raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
+        col_nr, char = it.next()
+        tokens.append(TokenStringLiteral(loc, line[loc.col + 1:col_nr], zero_terminated))
+
 
     file_lines = file_contents.splitlines()
 
@@ -70,6 +80,9 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                     multi_line_comment = False
             elif ud.category(char) == 'Zs':
                 pass
+            elif char == "c" and it.peak()[1] == "\"":
+                it.next()
+                lex_string_literal(col_nr, zero_terminated=True)
             elif ud.category(char) in {'Ll', 'Lu', 'Lo'} or char == "_":
                 loc = location()
                 while ud.category(it.peak()[1]) in {'Ll', 'Lu', 'Lo', 'Nd'} or it.peak()[1] == "_":
@@ -163,6 +176,10 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                         tokens.append(TokenBuildInType(loc, BuildInType.F64))
                     case "type":
                         tokens.append(TokenBuildInType(loc, BuildInType.TYPE))
+                    case "external":
+                        tokens.append(TokenKeyword(loc, Keyword.EXTERNAL))
+                    case "varargs":
+                        tokens.append(TokenKeyword(loc, Keyword.VARARGS))
                     case _:
                         tokens.append(TokenName(loc, name))
             elif ud.category(char) == 'Nd':
@@ -175,14 +192,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                     loc.length = col_nr - loc.col + 1
                     tokens.append(TokenNumberLiteral(loc, int(line[loc.col:col_nr + 1])))
             elif char == "\"":
-                loc = location()
-                while it.peak()[1] != "\"":
-                    col_nr, char = it.next()
-                loc.length = col_nr - loc.col + 1
-                if it.peak()[1] != "\"":
-                    raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
-                col_nr, char = it.next()
-                tokens.append(TokenStringLiteral(loc, line[loc.col + 1:col_nr]))
+                lex_string_literal(col_nr)
             elif char == "(":
                 tokens.append(TokenBracket(location(), True, BracketType.ROUND))
             elif char == ")":

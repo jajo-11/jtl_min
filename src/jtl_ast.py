@@ -89,6 +89,8 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
     match lhs_token := it.next():
         case TokenNumberLiteral() | TokenName() | TokenStringLiteral() | TokenBoolLiteral() | TokenBuildInType():
             lhs = ASTNodeValue(lhs_token)
+        case TokenKeyword(keyword=Keyword.VARARGS):
+            lhs = ASTNodeVarArgs(lhs_token)
         case TokenOperator(op=Operator.POINTER) if isinstance(nxt := it.peak(), TokenKeyword) and nxt.keyword == Keyword.CONSTANT:
             it.next()
             bp_right = UnaryBindingPower[Operator.CONSTANT_POINTER]
@@ -188,7 +190,15 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 case _:
                     raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, end_token.location)
             lhs = ASTNodeScope(lhs_token, nodes)
-        case TokenKeyword(keyword=Keyword.PROCEDURE):
+        case TokenKeyword(keyword=Keyword.PROCEDURE) | TokenKeyword(keyword=Keyword.EXTERNAL):
+            if lhs_token.keyword == Keyword.EXTERNAL:
+                if isinstance(procedure := it.peak(), TokenKeyword) and procedure.keyword == Keyword.PROCEDURE:
+                    it.next()
+                    external = True
+                else:
+                    raise ParserError.from_type(ParserErrorType.EXTERNAL_FREESTANDING, lhs_token.location)
+            else:
+                external = False
             match open_bracket := it.peak():
                 case TokenBracket(open=True, type=BracketType.ROUND):
                     it.next()
@@ -202,18 +212,21 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                         raise ParserError.from_type(ParserErrorType.EXPECTED_EXPRESSION, arrow.location)
                 case _:
                     type_expr = None
-            match it.peak():
-                case TokenBracket(open=True, type=BracketType.CURLY):
-                    it.next()
-                case _:
-                    raise ParserError.from_type(ParserErrorType.EXPECTED_BODY, it.peak().location)
-            proc_body = parse_list_of_exprs(it, end_on_curly=True)
-            match end_token := it.peak():
-                case TokenBracket(open=False, type=BracketType.CURLY):
-                    it.next()
-                case _:
-                    raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, end_token.location)
-            lhs = ASTNodeProcedure(lhs_token, arguments, type_expr, proc_body)
+            if external:
+                lhs = ASTNodeProcedureStub(lhs_token, arguments, type_expr)
+            else:
+                match it.peak():
+                    case TokenBracket(open=True, type=BracketType.CURLY):
+                        it.next()
+                    case _:
+                        raise ParserError.from_type(ParserErrorType.EXPECTED_BODY, it.peak().location)
+                proc_body = parse_list_of_exprs(it, end_on_curly=True)
+                match end_token := it.peak():
+                    case TokenBracket(open=False, type=BracketType.CURLY):
+                        it.next()
+                    case _:
+                        raise ParserError.from_type(ParserErrorType.UNCLOSED_BRACKET, end_token.location)
+                lhs = ASTNodeProcedure(lhs_token, arguments, type_expr, proc_body)
         case _:
             raise ParserError.from_type(ParserErrorType.EXPECTED_ATOM, lhs_token.location)
 

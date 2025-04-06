@@ -96,7 +96,7 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
         assert isinstance(expr.target, Name)
         expr.target.mut = Mutability.CONSTANT
         # TODO these should be evaluated at compile time and added to a separate memory section (data)
-        if not isinstance(expr.expression, ASTNodeProcedure):
+        if not isinstance(expr.expression, (ASTNodeProcedure, ASTNodeProcedureStub)):
             parent.body.append(expr)
 
     # fifth all other expressions - procedure bodies are deferred
@@ -205,6 +205,12 @@ def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnab
             type_id = e.type
             e = ASTNodeValue(TokenName(e.token.location, str_name))
             e.type = type_id
+    elif isinstance(e, ASTNodeProcedureStub):
+        if constant:
+            parent.procedure_stubs[n] = e
+        else:
+            raise ElaborationError.from_type(ElaborationErrorType.EXTERNAL_PROCEDURE_NOT_CONST,
+                                             node.token.location.whole_line())
 
     new_node = ASTNodeAssignment(node.token, node, n, e)
     new_node.type = n.type
@@ -234,7 +240,7 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
         if isinstance(node, ASTNodeUnary) and node.token.op == Operator.POINTER:
             pointer_to_mutable.append(True)
             node = node.child
-        if isinstance(node, ASTNodeUnary) and node.token.op == Operator.CONSTANT_POINTER:
+        elif isinstance(node, ASTNodeUnary) and node.token.op == Operator.CONSTANT_POINTER:
             pointer_to_mutable.append(False)
             node = node.child
         elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenBuildInType):
@@ -439,6 +445,9 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         type_id = node.right.type
                         node.right = ASTNodeValue(TokenName(node.right.token.location, str_name))
                         node.right.type = type_id
+                    elif isinstance(node.right, ASTNodeProcedureStub):
+                        raise ElaborationError.from_type(ElaborationErrorType.EXTERNAL_PROCEDURE_NOT_CONST,
+                                                         node.right.token.location.whole_line())
 
                     assign = ASTNodeAssignment(node.token, node, node.left, node.right)
                     assign.type = node.type
@@ -552,7 +561,11 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     else:
                         raise RuntimeError(f"Bad Number literal {node}")
                 case TokenStringLiteral():
-                    node.type = parent.type_table.new(Type(TypeType.STRING))
+                    if node.token.zero_terminated:
+                        t = parent.type_table.new(Type(TypeType.CHAR))
+                        node.type = parent.type_table.new(TypePointer(t, False, parent.type_table))
+                    else:
+                        node.type = parent.type_table.new(Type(TypeType.STRING))
                     return node
                 case TokenBoolLiteral():
                     node.type = parent.type_table.new(Type(TypeType.BOOL))
@@ -601,11 +614,19 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             else:
                 node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
             return node
-        case ASTNodeProcedure():
+        case ASTNodeProcedure() | ASTNodeProcedureStub():
             arguments = []
             untyped = []
-            for arg in node.arguments:
+            for i, arg in enumerate(node.arguments):
                 # TODO: allow for default values - this will also require field names to be saved in a procedure type
+                if isinstance(arg, ASTNodeVarArgs):
+                    if i != len(node.arguments) - 1:
+                        raise ElaborationError.from_type(ElaborationErrorType.VAR_ARGS_NOT_LAST, arg.token.location)
+                    elif isinstance(node, ASTNodeProcedure):
+                        raise ElaborationError.from_type(ElaborationErrorType.VAR_ARGS_NOT_EXTERNAL,
+                                                         node.token.location)
+                    node.var_args = True
+                    break
                 arguments.append(elaborate_name_and_type(parent, arg))
                 if parent.type_table.get(arguments[-1].type).info.group == TypeGroup.UNDEFINED:
                     untyped.append(arguments[-1])
@@ -623,10 +644,14 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 return_type = parent.type_table.new(Type(TypeType.NO_VALUE))
 
             node.argument_names = arguments
-            node.type = parent.type_table.new(TypeProcedure(list(map(lambda x: x.type, arguments)), return_type,
-                                                            parent.type_table))
+            node.type = parent.type_table.new(
+                TypeProcedure(list(map(lambda x: x.type, arguments)), return_type, node.var_args,
+                              parent.type_table))
 
             if not direct_assignment:
+                if isinstance(node, ASTNodeProcedureStub):
+                    raise ElaborationError.from_type(ElaborationErrorType.EXTERNAL_PROCEDURE_NOT_CONST,
+                                                     node.token.location)
                 uid = parent.unique_indexer.next()
                 name = Name(
                     uid,
@@ -659,11 +684,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
 
             proc_type = parent.type_table.get(proc_name.type)
             argument_list: List[int]
+            varargs = False
 
             match proc_type:
                 case TypeProcedure():
                     argument_list = proc_type.arguments
                     return_type = proc_type.return_type
+                    varargs = proc_type.varargs
                 case TypeRecordType():
                     argument_list = [field_name.type for field_name in proc_type.record.fields.values()]
                     instance_type = parent.type_table.new(proc_type.to_instance_type())
@@ -671,7 +698,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 case _:
                     raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, p.token.location)
 
-            if len(node.children) != len(argument_list):
+            if len(node.children) != len(argument_list) and not varargs:
                 raise ElaborationError.from_type(ElaborationErrorType.WRONG_NUMBER_OF_ARGUMENTS,
                                                  node.token.location.whole_line(),
                                                  len(argument_list), len(node.children))
@@ -687,6 +714,12 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                      i + 1,
                                                      parent.type_table.get(t),
                                                      parent.type_table.get(elab.type))
+
+            if varargs:
+                for n in node.children[len(argument_list):]:
+                    elab = elaborate_expression(parent, n, constant, returnable)
+                    call_arguments.append(elab)
+
             if parent.parent is None:
                 # FIXME: Global call - why did I disallow this
                 raise ElaborationError.from_type(ElaborationErrorType.GLOBAL_CALL, node.token.location.whole_line())
