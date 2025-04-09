@@ -1,52 +1,68 @@
-var sum = 1
-if sum <= 1 then {
-    // print(sum)
-    sum = (sum + 1) * sum
-    {
-        let a = 1 * 2
+const main = proc() -> int {
+    var sum = 1
+    if sum <= 1 then {
+        // print(sum)
+        sum = (sum + 1) * sum
+        {
+            let a = 1 * 2
+        }
     }
+
+    let no = if sum > 0 and 1 == 1 then sum else -sum
+    return no
 }
 
-let no = if sum > 0 and 1 == 1 then sum else -sum
-
 /*
->>>
-%1_sum = alloc 8 align 8
-%2_no = alloc 8 align 8
-%11_a = alloc 8 align 8
-store i64 1 into %1_sum
-%5 = load i64 %1_sum
-%6 = leq u32 %5, 1
-jump_if %6 is zero 4_if_end else 3_if_body
-3_if_body:
-%7 = load i64 %1_sum
-%8 = add i64 %7, 1
-%9 = load i64 %1_sum
-%10 = mul i64 %8, %9
-store i64 %10 into %1_sum
-%12 = mul i64 1, 2
-store i64 %12 into %11_a
-jump 4_if_end
-4_if_end:
-%16 = load i64 %1_sum
-%17 = greater u32 %16, 0
-18_and_left:
-jump_if %17 is zero 20_and else 19_and_right
-19_and_right:
-%21 = eq u32 1, 1
-jump 20_and
-20_and:
-%22 = PHI u32 (%17 from 18_and_left), (%21 from 19_and_right)
-jump_if %22 is zero 14_if_false else 13_if_true
-13_if_true:
-%23 = load i64 %1_sum
-jump 15_if_end
-14_if_false:
-%24 = load i64 %1_sum
-%25 = neg i64 %24
-jump 15_if_end
-15_if_end:
-%26 = PHI i64 (%23 from 13_if_true), (%25 from 14_if_false)
-store i64 %26 into %2_no
-<<<
+>>>ir
+procedure i32 @main() {
+    %2_sum = alloc 4 align 4
+    %3_no = alloc 4 align 4
+    %12_a = alloc 8 align 8
+    store i32 1 into %2_sum
+    %6 = load i32 %2_sum
+    %7 = leq u32 %6, 1
+    jump_if %7 is zero 5_if_end else 4_if_body
+    4_if_body:
+    %8 = load i32 %2_sum
+    %9 = add i32 %8, 1
+    %10 = load i32 %2_sum
+    %11 = mul i32 %9, %10
+    store i32 %11 into %2_sum
+    %13 = mul i64 1, 2
+    store i64 %13 into %12_a
+    jump 5_if_end
+    5_if_end:
+    %17 = load i32 %2_sum
+    %18 = greater u32 %17, 0
+    19_and_left:
+    jump_if %18 is zero 21_and else 20_and_right
+    20_and_right:
+    %22 = eq u32 1, 1
+    jump 21_and
+    21_and:
+    %23 = PHI u32 (%18 from 19_and_left), (%22 from 20_and_right)
+    jump_if %23 is zero 15_if_false else 14_if_true
+    14_if_true:
+    %24 = load i32 %2_sum
+    jump 16_if_end
+    15_if_false:
+    %25 = load i32 %2_sum
+    %26 = neg i32 %25
+    jump 16_if_end
+    16_if_end:
+    %27 = PHI i32 (%24 from 14_if_true), (%26 from 15_if_false)
+    store i32 %27 into %3_no
+    %28 = load i32 %3_no
+    return %28
+}
+
+ir<<<
+
+>>>stdout
+stdout<<<
+
+>>>stderr
+<<<stderr
+
+[Return Value] 2
 */

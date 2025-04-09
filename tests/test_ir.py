@@ -15,9 +15,9 @@ def eval_and_get_saved_ir(file_name: str) -> (str, str):
     start_index = 0
     stop_index = 0
     for i, line in enumerate(src_lines):
-        if line == ">>>":
+        if line == ">>>ir":
             start_index = i
-        elif line == "<<<":
+        elif line == "ir<<<":
             stop_index = i
     target_ir = "\n".join(src_lines[start_index + 1:stop_index])
 
@@ -62,4 +62,8 @@ class TestIr(unittest.TestCase):
 
     def test_records(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/records.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_external_function(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/external_function.jtl")
         self.assertEqual(target_ir, ir_striped)

@@ -1,31 +1,48 @@
-var i: i32 = 0
-const length = 10
+const main = proc () -> int {
+    var i: i32 = 0
+    const length = 10
 
-while i < length {
-    // printf("%d", i)
-    var c = i + 1
-    i = c
+    while i < length {
+        // printf("%d", i)
+        var c = i + 1
+        i = c
+    }
+
+    return i
 }
 
 /*
->>>
-%1_length = alloc 4 align 4
-%2_i = alloc 4 align 4
-%9_c = alloc 4 align 4
-store i32 10 into %1_length
-store i32 0 into %2_i
-3_while_head:
-%6 = load i32 %2_i
-%7 = load i32 %1_length
-%8 = less u32 %6, %7
-jump_if %8 is zero 5_while_end else 4_while_body
-4_while_body:
-%10 = load i32 %2_i
-%11 = add i32 %10, 1
-store i32 %11 into %9_c
-%12 = load i32 %9_c
-store i32 %12 into %2_i
-jump 3_while_head
-5_while_end:
-<<<
+>>>ir
+procedure i32 @main() {
+    %2_length = alloc 4 align 4
+    %3_i = alloc 4 align 4
+    %10_c = alloc 4 align 4
+    store i32 10 into %2_length
+    store i32 0 into %3_i
+    4_while_head:
+    %7 = load i32 %3_i
+    %8 = load i32 %2_length
+    %9 = less u32 %7, %8
+    jump_if %9 is zero 6_while_end else 5_while_body
+    5_while_body:
+    %11 = load i32 %3_i
+    %12 = add i32 %11, 1
+    store i32 %12 into %10_c
+    %13 = load i32 %10_c
+    store i32 %13 into %3_i
+    jump 4_while_head
+    6_while_end:
+    %14 = load i32 %3_i
+    return %14
+}
+
+ir<<<
+
+>>>stdout
+<<<stdout
+
+>>>stderr
+stderr<<<
+
+[Return Value] 10
 */

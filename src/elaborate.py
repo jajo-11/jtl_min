@@ -846,6 +846,9 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
 
     # if same do nothing
     if at == bt:
+        # if they are equal but not the same instance
+        if at is not bt:
+            type_table.overwrite(a.type, b.type)
         return a, b
 
     assert at.info.group != TypeGroup.UNDEFINED

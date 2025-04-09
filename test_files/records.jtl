@@ -34,7 +34,7 @@ const main = proc() -> int {
 }
 
 /*
->>>
+>>>ir
 &1_Vec3 = type i32, i32, i32
 &2_LinkedList = type i32, ptr
 procedure i32 @main() {
@@ -89,5 +89,7 @@ procedure i32 @main() {
     return 1
 }
 
-<<<
+ir<<<
+
+[Return Value] 1
 */

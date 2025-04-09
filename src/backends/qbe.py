@@ -90,7 +90,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
     out_file.write("@start\n")
 
     for inst in chain(procedure.alloc_instructions, procedure.instructions):
-        if not isinstance(inst, IRInstLabel):
+        if not isinstance(inst, (IRInstLabel, IRInstPHI)):
             out_file.write(f"   dbgloc {inst.location.line}, {inst.location.col}\n")
         match inst:
             case IRInstLabel():
@@ -149,7 +149,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
             case IRInstPHI():
                 out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
                                f"phi @label.{inst.from1} {qbe_value(inst.val1)}, " +
-                               "@label.{inst.from2} {qbe_value(inst.val2)}\n")
+                               f"@label.{inst.from2} {qbe_value(inst.val2)}\n")
             case IRInstEqual():
                 assert not isinstance(inst.op1.type, IRTypeRecord)
                 assert inst.op1.type == inst.op2.type

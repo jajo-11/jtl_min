@@ -2,7 +2,7 @@ let sum = 3 * (1 + 2) * -2
 let two = sum / sum + 1
 
 /*
->>>
+>>>ir
 %1_sum = alloc 8 align 8
 %2_two = alloc 8 align 8
 %3 = add i64 1, 2
@@ -15,5 +15,5 @@ store i64 %6 into %1_sum
 %9 = div i64 %7, %8
 %10 = add i64 %9, 1
 store i64 %10 into %2_two
-<<<
+ir<<<
 */

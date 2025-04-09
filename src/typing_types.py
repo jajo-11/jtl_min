@@ -143,7 +143,7 @@ class TypeTable:
         current = old
         while isinstance(next := self.table[current], int):
             current = next
-        self.table[old] = new # this is not strictly necessary but reduces time to resolve type
+        self.table[old] = current # this is not strictly necessary but reduces time to resolve type
         self.table[current] = new
 
 

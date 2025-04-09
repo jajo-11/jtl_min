@@ -10,3 +10,57 @@ const main = proc(argc: int, argv: ^^char) -> int {
     }
     return 0
 }
+
+/*
+>>>ir
+procedure i32 @main(i32 %argc, ptr %argv) {
+    %2_argc = alloc 4 align 4
+    %3_argv = alloc 8 align 8
+    %4_i = alloc 4 align 4
+    %5_argv_int = alloc 8 align 8
+    store i32 %argc into %2_argc
+    store ptr %argv into %3_argv
+    %7 = load i32 %2_argc
+    call @printf(ptr @6, i32 %7)
+    store i32 0 into %4_i
+    %8 = load ptr %3_argv
+    %9 = cast u64 %8
+    store u64 %9 into %5_argv_int
+    10_while_head:
+    %13 = load i32 %4_i
+    %14 = load i32 %2_argc
+    %15 = less u32 %13, %14
+    jump_if %15 is zero 12_while_end else 11_while_body
+    11_while_body:
+    %17 = load i32 %4_i
+    %18 = cast u64 %17
+    %19 = mul u64 8, %18
+    %20 = load u64 %5_argv_int
+    %21 = add u64 %19, %20
+    %22 = cast ptr %21
+    %23 = load ptr %22
+    call @printf(ptr @16, ptr %23)
+    %24 = load i32 %4_i
+    %25 = add i32 %24, 1
+    store i32 %25 into %4_i
+    jump 10_while_head
+    12_while_end:
+    return 0
+}
+
+data %6 = "Hello World! %d\n"
+data %16 = "%s\n"
+ir<<<
+
+>>>stdout
+Hello World! 1
+/tmp/test.exe
+
+stdout<<<
+
+
+>>>stderr
+stderr<<<
+
+[Return Value] 0
+*/

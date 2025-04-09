@@ -21,7 +21,7 @@ const main = proc() -> int {
 }
 
 /*
->>>
+>>>ir
 procedure None @1_raw_increment(ptr %value) {
     %5_value = alloc 8 align 8
     store ptr %value into %5_value
@@ -76,5 +76,13 @@ procedure i32 @main() {
     return %33
 }
 
-<<<
+ir<<<
+
+>>>stdout
+stdout<<<
+
+>>>stderr
+stderr<<<
+
+[Return Value] 4
 */

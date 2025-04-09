@@ -10,7 +10,7 @@ const main = proc() -> int {
 }
 
 /*
->>>
+>>>ir
 procedure i32 @main() {
     %2_a = alloc 4 align 4
     %3_a2 = alloc 4 align 4
@@ -46,5 +46,13 @@ procedure i32 @main() {
     return %25
 }
 
-<<<
+ir<<<
+
+>>>stdout
+stdout<<<
+
+>>>stderr
+stderr<<<
+
+[Return Value] 2
 */
