@@ -35,11 +35,11 @@ def get_error_with_line_info(header: str, title: str, location: CodeLocation, er
             continue
         msg += f" {line_nr + 1:0{line_number_digits}} | {line_str}\n"
         if line_nr == location.line_start and line_nr == location.line_stop:
-            msg += f"{line_number_space}| " + " " * location.col_start + "^" * (location.col_stop - location.col_start + 1) + "\n"
+            msg += f"{line_number_space}| " + " " * location.col_start + "^" * (location.col_stop - location.col_start) + "\n"
         elif line_nr == location.line_start:
             msg += f"{line_number_space}| " + " " * location.col_start + "^" * (len(line_str) - location.col_start) + "\n"
         elif line_nr == location.line_stop:
-            msg += f"{line_number_space}| " + "^" * (location.col_stop + 1) + "\n"
+            msg += f"{line_number_space}| " + "^" * (location.col_stop) + "\n"
         else:
             msg += f"{line_number_space}| " + "^" * len(line_str) + "\n"
         blank_line = False

@@ -87,7 +87,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 loc = location()
                 while ud.category(it.peak()[1]) in {'Ll', 'Lu', 'Lo', 'Nd'} or it.peak()[1] == "_":
                     col_nr, char = it.next()
-                loc.col_stop = col_nr
+                loc.col_stop = col_nr + 1
                 name = line[loc.col_start:col_nr + 1]
                 match name:
                     case "var":
@@ -189,7 +189,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 if it.peak()[1] == ".":
                     finish_parsing_float(it, line, loc, tokens)
                 else:
-                    loc.col_stop = col_nr
+                    loc.col_stop = col_nr + 1
                     tokens.append(TokenNumberLiteral(loc, int(line[loc.col_start:col_nr + 1])))
             elif char == "\"":
                 lex_string_literal(col_nr)
@@ -270,5 +270,5 @@ def finish_parsing_float(it: PeakableIterator, line: str, loc: CodeLocation, tok
     col_nr, char = it.next()
     while ud.category(it.peak()[1]) in {'Nd'}:
         col_nr, char = it.next()
-    loc.col_stop = col_nr
+    loc.col_stop = col_nr + 1
     tokens.append(TokenNumberLiteral(loc, float(line[loc.col_start:col_nr + 1])))

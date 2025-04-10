@@ -106,6 +106,7 @@ class ASTNodeUnaryRight(ASTNode):
 @dataclass(slots=True)
 class ASTNodeTupleLike(ASTNode):
     token: TokenBracket | TokenKeyword
+    location: CodeLocation
     children: List[ASTNode]
     parent: Optional[ASTNode] = None
 
@@ -120,15 +121,26 @@ class ASTNodeTupleLike(ASTNode):
                 return f"({self.token.type} {self.parent} [{" ".join(map(str, self.children))}])"
 
     def get_location(self) -> CodeLocation:
-        if len(self.children) == 0:
-            return self.token.location
-        else:
-            return self.token.location.span(self.children[-1].get_location())
+        return self.location
+
+@dataclass(slots=True)
+class ASTNodeArrayType(ASTNode):
+    token: TokenBracket
+    location: CodeLocation
+    array_children: List[ASTNode]
+    type_expression: ASTNode
+
+    def __str__(self) -> str:
+        return f"([ArrayType] [{", ".join(map(str, self.array_children))}] {str(self.type_expression)})"
+
+    def get_location(self) -> CodeLocation:
+        return self.location
 
 
 @dataclass(slots=True)
 class ASTNodeScope(ASTNode):
     body: List[ASTNode]
+    location: CodeLocation
     elaborated_body: Optional["Scope"] = None
 
     def __repr__(self):
@@ -139,14 +151,12 @@ class ASTNodeScope(ASTNode):
         return "Scope:\n  " + "\n  ".join(lines)
 
     def get_location(self) -> CodeLocation:
-        if len(self.body) == 0:
-            return self.token.location
-        else:
-            return self.token.location.span(self.body[-1].get_location())
+        return self.location
 
 @dataclass(slots=True)
 class ASTNodeRecord(ASTNode):
     body: List[ASTNode]
+    location: CodeLocation
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
@@ -156,15 +166,13 @@ class ASTNodeRecord(ASTNode):
         return "(Record\n  " + "\n  ".join(lines) + ")"
 
     def get_location(self) -> CodeLocation:
-        if len(self.body) == 0:
-            return self.token.location
-        else:
-            return self.token.location.span(self.body[-1].get_location())
+        return self.location
 
 
 @dataclass(slots=True)
 class ASTNodeIf(ASTNode):
     token: TokenKeyword
+    location: CodeLocation
     condition: ASTNode
     body: ASTNode
     else_location: Optional[CodeLocation]
@@ -179,12 +187,13 @@ class ASTNodeIf(ASTNode):
         return f"(if {self.condition}\n body:\n   {body}\n else:\n   {else_body}\n)"
 
     def get_location(self) -> CodeLocation:
-        return self.token.location.span(self.condition.get_location())
+        return self.location
 
 
 @dataclass(slots=True)
 class ASTNodeWhile(ASTNode):
     token: TokenKeyword
+    location: CodeLocation
     condition: ASTNode
     body: List[ASTNode]
     elaborated_body: Optional["Scope"] = None
@@ -197,14 +206,13 @@ class ASTNodeWhile(ASTNode):
         return f"(while {self.condition}\n body:\n   {'\n   '.join(body)}\n)"
 
     def get_location(self) -> CodeLocation:
-        if len(self.body) == 0:
-            return self.token.location
-        return self.token.location.span(self.condition.get_location())
+        return self.location
 
 
 @dataclass(slots=True)
 class ASTNodeProcedure(ASTNode):
     token: TokenKeyword
+    location: CodeLocation # just the header
     arguments: List[ASTNode]
     return_type_expr: Optional[ASTNode]
     body: List[ASTNode]
@@ -220,17 +228,14 @@ class ASTNodeProcedure(ASTNode):
         return f"(proc [{', '.join(map(str, self.arguments))}] {self.return_type_expr}\n body:\n   {'\n  '.join(body)}\n)"
 
     def get_location(self) -> CodeLocation:
-        if self.return_type_expr is not None:
-            return self.token.location.span(self.return_type_expr.get_location())
-        elif len(self.arguments) == 0:
-            return self.token.location
-        return self.token.location.span(self.arguments[-1].get_location())
+        return self.location
 
 
 
 @dataclass(slots=True)
 class ASTNodeProcedureStub(ASTNode):
     token: TokenKeyword
+    location: CodeLocation
     arguments: List[ASTNode]
     return_type_expr: Optional[ASTNode]
     argument_names: List["Name"] = field(default_factory=list)
@@ -243,11 +248,7 @@ class ASTNodeProcedureStub(ASTNode):
         return f"(proc_stub [{', '.join(map(str, self.arguments))}] {self.return_type_expr})\n"
 
     def get_location(self) -> CodeLocation:
-        if self.return_type_expr is not None:
-            return self.token.location.span(self.return_type_expr.get_location())
-        elif len(self.arguments) == 0:
-            return self.token.location
-        return self.token.location.span(self.arguments[-1].get_location())
+        return self.location
 
 
 @dataclass(slots=True)

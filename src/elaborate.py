@@ -579,6 +579,9 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                          node.token.location)
                     node.type = name_obj.type
                     return node
+                case TokenBuildInType():
+                    node.type = parent.type_table.new(Type(TypeType.TYPE))
+                    return node
         case ASTNodeIf():
             node.condition = elaborate_expression(parent, node.condition, constant, returnable)
             condition_type = parent.type_table.get(node.condition.type)
