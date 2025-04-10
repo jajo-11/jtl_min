@@ -56,7 +56,7 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
         loc = location()
         while it.peak()[1] != "\"":
             col_nr, char = it.next()
-        loc.length = col_nr - loc.col_start + 2
+        loc.col_stop = col_nr + 1
         if it.peak()[1] != "\"":
             raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
         col_nr, char = it.next()

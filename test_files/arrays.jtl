@@ -1,0 +1,5 @@
+const main = proc() -> int {
+    var array: [3]i64 = [3, 2, 1]
+    array[2] = array[1]
+    return cast(int, array[2])
+}

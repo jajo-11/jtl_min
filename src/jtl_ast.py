@@ -145,7 +145,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                     raise ParserError.from_type(ParserErrorType.EXPECTED_BODY_WHILE, curly_bracket.location)
             it.next()
             nodes = parse_list_of_exprs(it, end_on_curly=True)
-            match end_token := it.peak():
+            match it.peak():
                 case TokenBracket(open=False, type=BracketType.CURLY):
                     it.next()
                 case _:
@@ -273,9 +273,10 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 else:
                     it.next()
             case _:
+                # This is an array type
                 if (isinstance(lhs, ASTNodeTupleLike) and isinstance(lhs.token, TokenBracket)
                         and lhs.token.type == BracketType.SQUARE):
-                    if (rhs := parse_expr(it, ignore_new_line=ignore_new_line)) is None:
+                    if (rhs := parse_expr(it, UnaryBindingPower[Operator.POINTER], ignore_new_line)) is None:
                         return None
                     lhs = ASTNodeArrayType(lhs.token, lhs.location.span(rhs.get_location()), lhs.children, rhs)
                 else:

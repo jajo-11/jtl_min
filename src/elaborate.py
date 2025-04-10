@@ -1,4 +1,3 @@
-import operator
 from typing import Tuple
 
 from ast_types import *
@@ -236,27 +235,35 @@ def elaborate_name_and_type(parent: Scope, node: ASTNode) -> Name:
 def elaborate_type(parent: Scope, node: ASTNode) -> int:
     pointer_to_mutable = []
     while True:
-        if isinstance(node, ASTNodeUnary) and node.token.op == Operator.POINTER:
-            pointer_to_mutable.append(True)
-            node = node.child
-        elif isinstance(node, ASTNodeUnary) and node.token.op == Operator.CONSTANT_POINTER:
-            pointer_to_mutable.append(False)
-            node = node.child
-        elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenBuildInType):
-            base_type = Type(map_build_in_type_to_type_type[node.token.type])
-            for mut in pointer_to_mutable:
-                base_type = TypePointer(parent.type_table.new(base_type), mut, parent.type_table)
-            return parent.type_table.new(base_type)
-        elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenName):
-            name_obj = parent.lookup(node.token.name)
-            if name_obj is None:
-                raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME, node.get_location())
-            base_type = name_obj.type  # type: ignore
-            for mut in pointer_to_mutable:
-                base_type = TypePointer(parent.type_table.new(base_type), mut, parent.type_table)
-            return parent.type_table.new(base_type)
-        else:
-            raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_TYPE, node.get_location())
+        match node:
+            case ASTNodeUnary() if node.token.op == Operator.POINTER:
+                pointer_to_mutable.append(True)
+                node = node.child
+            case ASTNodeUnary() if node.token.op == Operator.CONSTANT_POINTER:
+                pointer_to_mutable.append(False)
+                node = node.child
+            case ASTNodeValue() if isinstance(node.token, TokenBuildInType):
+                base_type_id = parent.type_table.new(Type(map_build_in_type_to_type_type[node.token.type]))
+                for mut in pointer_to_mutable:
+                    base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
+                return base_type_id
+            case ASTNodeValue() if isinstance(node.token, TokenName):
+                name_obj = parent.lookup(node.token.name)
+                if name_obj is None:
+                    raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME, node.get_location())
+                base_type = parent.type_table.get(name_obj.type)
+                if base_type.info.group != TypeGroup.TYPE:
+                    raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_DECLARATION, node.get_location(),
+                                                 base_type)
+                base_type_id = name_obj.type
+                for mut in pointer_to_mutable:
+                    base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
+                return base_type_id
+            case ASTNodeArrayType():
+                # TODO make sure array_children are either int literals or int constants
+                raise NotImplementedError()
+            case _:
+                raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_TYPE, node.get_location())
 
 
 def is_numeric(type: Type) -> bool:

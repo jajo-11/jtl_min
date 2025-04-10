@@ -196,6 +196,7 @@ class JTLTypeErrorType(Enum):
                                                  " (It is currently not enough that the type can be inferred later)")
     TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")
     TYPE_MISSMATCH_ASSIGNMENT = ("Type Error", "Can not assign expression of type {} to value of type {}")
+    NOT_A_TYPE = ("Type Error", "Expected a type here but got {}")
 
 
 @dataclass

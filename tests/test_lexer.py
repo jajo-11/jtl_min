@@ -11,29 +11,29 @@ class TestLexer(unittest.TestCase):
         tokens = lex_file("test_file", test_content)
         line_str = list(map(lambda x: x.strip(), test_content.splitlines()))
         expected_tokens = [
-            TokenNewLine(location=CodeLocation("test_file", 0, 0, 1, "")),
-            TokenName(location=CodeLocation("test_file", 1, 0, 3, line_str[1]), name="ABC"),
-            TokenNumberLiteral(location=CodeLocation("test_file", 1, 4, 3, line_str[1]), value=123),
-            TokenOperator(location=CodeLocation("test_file", 1, 8, 1, line_str[1]), op=Operator.TIMES),
-            TokenOperator(location=CodeLocation("test_file", 1, 10, 1, line_str[1]), op=Operator.PLUS),
-            TokenOperator(location=CodeLocation("test_file", 1, 12, 1, line_str[1]), op=Operator.MINUS),
-            TokenOperator(location=CodeLocation("test_file", 1, 14, 1, line_str[1]), op=Operator.ASSIGNMENT),
-            TokenOperator(location=CodeLocation("test_file", 1, 16, 1, line_str[1]), op=Operator.TIMES),
-            TokenOperator(location=CodeLocation("test_file", 1, 17, 1, line_str[1]), op=Operator.DIVIDE),
-            TokenOperator(location=CodeLocation("test_file", 1, 18, 1, line_str[1]), op=Operator.MODULO),
-            TokenName(location=CodeLocation("test_file", 1, 19, 6, line_str[1]), name="sum123"),
-            TokenBracket(location=CodeLocation("test_file", 1, 25, 1, line_str[1]), open=True, type=BracketType.ROUND),
-            TokenBracket(location=CodeLocation("test_file", 1, 26, 1, line_str[1]), open=False, type=BracketType.ROUND),
-            TokenNumberLiteral(location=CodeLocation("test_file", 1, 27, 2, line_str[1]), value=32),
-            TokenName(location=CodeLocation("test_file", 1, 29, 4, line_str[1]), name="sd_a"),
-            TokenOperator(location=CodeLocation("test_file", 1, 33, 1, line_str[1]), op=Operator.DOT),
-            TokenNewLine(location=CodeLocation("test_file", 1, 34, 1, line_str[1])),
-            TokenOperator(location=CodeLocation("test_file", 2, 0, 1, line_str[2]), op=Operator.POINTER),
-            TokenOperator(location=CodeLocation("test_file", 2, 1, 1, line_str[2]), op=Operator.BITWISE_AND),
-            TokenOperator(location=CodeLocation("test_file", 2, 2, 1, line_str[2]), op=Operator.COLON),
-            TokenBoolLiteral(location=CodeLocation("test_file", 2, 3, 4, line_str[2]), value=True),
-            TokenBoolLiteral(location=CodeLocation("test_file", 2, 8, 5, line_str[2]), value=False),
-            TokenNewLine(location=CodeLocation("test_file", 2, 13, 1, line_str[2])),
+            TokenNewLine(location=CodeLocation("test_file", 0, 0, 0, 0)),
+            TokenName(location=CodeLocation("test_file", 1, 1, 0, 3), name="ABC"),
+            TokenNumberLiteral(location=CodeLocation("test_file", 1, 1, 4, 7), value=123),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 8, 9), op=Operator.TIMES),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 10, 11), op=Operator.PLUS),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 12, 13), op=Operator.MINUS),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 14, 15), op=Operator.ASSIGNMENT),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 16, 17), op=Operator.TIMES),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 17, 18), op=Operator.DIVIDE),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 18, 19), op=Operator.MODULO),
+            TokenName(location=CodeLocation("test_file", 1, 1, 19, 25), name="sum123"),
+            TokenBracket(location=CodeLocation("test_file", 1, 1, 25, 26), open=True, type=BracketType.ROUND),
+            TokenBracket(location=CodeLocation("test_file", 1, 1, 26, 27), open=False, type=BracketType.ROUND),
+            TokenNumberLiteral(location=CodeLocation("test_file", 1, 1, 27, 29), value=32),
+            TokenName(location=CodeLocation("test_file", 1, 1, 29, 33), name="sd_a"),
+            TokenOperator(location=CodeLocation("test_file", 1, 1, 33, 34), op=Operator.DOT),
+            TokenNewLine(location=CodeLocation("test_file", 1, 1, 34, 35)),
+            TokenOperator(location=CodeLocation("test_file", 2, 2, 0, 1), op=Operator.POINTER),
+            TokenOperator(location=CodeLocation("test_file", 2, 2, 1, 2), op=Operator.BITWISE_AND),
+            TokenOperator(location=CodeLocation("test_file", 2, 2, 2, 3), op=Operator.COLON),
+            TokenBoolLiteral(location=CodeLocation("test_file", 2, 2, 3, 7), value=True),
+            TokenBoolLiteral(location=CodeLocation("test_file", 2, 2, 8, 13), value=False),
+            TokenNewLine(location=CodeLocation("test_file", 2, 2, 13, 14)),
         ]
         for x, y in zip(expected_tokens, tokens):
             self.assertEqual(x, y)
@@ -42,17 +42,17 @@ class TestLexer(unittest.TestCase):
         test_content = "< not<=or>=and!====>"
         tokens = lex_file("test_file", test_content)
         expected_tokens = [
-            TokenOperator(CodeLocation("test_file", 0, 0, 1, test_content), Operator.LESS),
-            TokenOperator(CodeLocation("test_file", 0, 2, 3, test_content), Operator.NOT),
-            TokenOperator(CodeLocation("test_file", 0, 5, 2, test_content), Operator.LESSEQUAL),
-            TokenOperator(CodeLocation("test_file", 0, 7, 2, test_content), Operator.OR),
-            TokenOperator(CodeLocation("test_file", 0, 9, 2, test_content), Operator.GREATEREQUAL),
-            TokenOperator(CodeLocation("test_file", 0, 11, 3, test_content), Operator.AND),
-            TokenOperator(CodeLocation("test_file", 0, 14, 2, test_content), Operator.NOTEQUAL),
-            TokenOperator(CodeLocation("test_file", 0, 16, 2, test_content), Operator.EQUAL),
-            TokenOperator(CodeLocation("test_file", 0, 18, 1, test_content), Operator.ASSIGNMENT),
-            TokenOperator(CodeLocation("test_file", 0, 19, 1, test_content), Operator.GREATER),
-            TokenNewLine(location=CodeLocation("test_file", 0, 20, 1, test_content)),
+            TokenOperator(CodeLocation("test_file", 0, 0, 0, 1), Operator.LESS),
+            TokenOperator(CodeLocation("test_file", 0, 0, 2, 5), Operator.NOT),
+            TokenOperator(CodeLocation("test_file", 0, 0, 5, 7), Operator.LESSEQUAL),
+            TokenOperator(CodeLocation("test_file", 0, 0, 7, 9), Operator.OR),
+            TokenOperator(CodeLocation("test_file", 0, 0, 9, 11), Operator.GREATEREQUAL),
+            TokenOperator(CodeLocation("test_file", 0, 0, 11, 14), Operator.AND),
+            TokenOperator(CodeLocation("test_file", 0, 0, 14, 16), Operator.NOTEQUAL),
+            TokenOperator(CodeLocation("test_file", 0, 0, 16, 18), Operator.EQUAL),
+            TokenOperator(CodeLocation("test_file", 0, 0, 18, 19), Operator.ASSIGNMENT),
+            TokenOperator(CodeLocation("test_file", 0, 0, 19, 20), Operator.GREATER),
+            TokenNewLine(location=CodeLocation("test_file", 0, 0, 20, 21)),
         ]
         for x, y in zip(expected_tokens, tokens):
             self.assertEqual(x, y)
@@ -83,9 +83,9 @@ class TestLexer(unittest.TestCase):
             self.assertEqual(kwd, tkn.keyword)
             self.assertEqual(tkn.location.file_name, "test_file")
             self.assertEqual(tkn.location.line_start, 0)
+            self.assertEqual(tkn.location.line_stop, 0)
             self.assertEqual(tkn.location.col_start, col)
-            self.assertEqual(tkn.location.length, len(kwd.value))
-            self.assertEqual(tkn.location.line_str, test_content)
+            self.assertEqual(tkn.location.col_stop, col + len(kwd.value))
             col += 1 + len(kwd.value)
 
     def test_build_in_types(self):
@@ -96,20 +96,20 @@ class TestLexer(unittest.TestCase):
             self.assertEqual(bit, tkn.type)
             self.assertEqual(tkn.location.file_name, "test_file")
             self.assertEqual(tkn.location.line_start, 0)
+            self.assertEqual(tkn.location.line_stop, 0)
             self.assertEqual(tkn.location.col_start, col)
-            self.assertEqual(tkn.location.length, len(bit.value))
-            self.assertEqual(tkn.location.line_str, test_content)
+            self.assertEqual(tkn.location.col_stop, col + len(bit.value))
             col += 1 + len(bit.value)
 
     def test_numbers(self):
         test_content = "just_a_name123 123 123.456 123.456.789"
         tokens = lex_file("test_file", test_content)
         expected_tokens = [
-            TokenName(CodeLocation("test_file", 0, 0, 14, test_content), name="just_a_name123"),
-            TokenNumberLiteral(CodeLocation("test_file", 0, 15, 3, test_content), value=123),
-            TokenNumberLiteral(CodeLocation("test_file", 0, 19, 7, test_content), value=123.456),
-            TokenNumberLiteral(CodeLocation("test_file", 0, 27, 7, test_content), value=123.456),
-            TokenNumberLiteral(CodeLocation("test_file", 0, 34, 4, test_content), value=0.789),
+            TokenName(CodeLocation("test_file", 0, 0, 0, 14), name="just_a_name123"),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 15, 18), value=123),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 19, 26), value=123.456),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 27, 34), value=123.456),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 34, 38), value=0.789),
         ]
         for x, y in zip(expected_tokens, tokens):
             self.assertEqual(x, y)
