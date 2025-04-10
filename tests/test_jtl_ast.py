@@ -50,7 +50,7 @@ class TestParser(unittest.TestCase):
             with self.assertRaises(ParserError) as context:
                 parse_tokens(tokens)
             pe = context.exception
-            self.assertEqual(col, pe.location.col)
+            self.assertEqual(col, pe.location.col_start)
             self.assertEqual(pet.value[0], pe.title)
             self.assertEqual(pet.value[1], pe.message)
 

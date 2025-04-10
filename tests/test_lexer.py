@@ -64,7 +64,7 @@ class TestLexer(unittest.TestCase):
             lex_file("test_file", test_content)
         self.assertEqual(LexerErrorType.INVALID.value[0], context.exception.title)
         self.assertEqual(LexerErrorType.INVALID.value[1], context.exception.message)
-        self.assertEqual(5, context.exception.location.col)
+        self.assertEqual(5, context.exception.location.col_start)
 
     def test_unimplemented_operator(self):
         """This does not testa all invalid chars just one"""
@@ -73,7 +73,7 @@ class TestLexer(unittest.TestCase):
             lex_file("test_file", test_content)
         self.assertEqual(LexerErrorType.UNIMPLEMENTED.value[0], context.exception.title)
         self.assertEqual(LexerErrorType.UNIMPLEMENTED.value[1], context.exception.message)
-        self.assertEqual(5, context.exception.location.col)
+        self.assertEqual(5, context.exception.location.col_start)
 
     def test_keywords(self):
         test_content = " ".join(map(lambda x: x.value, iter(Keyword)))
@@ -82,8 +82,8 @@ class TestLexer(unittest.TestCase):
         for kwd, tkn in zip(Keyword, tokens):
             self.assertEqual(kwd, tkn.keyword)
             self.assertEqual(tkn.location.file_name, "test_file")
-            self.assertEqual(tkn.location.line, 0)
-            self.assertEqual(tkn.location.col, col)
+            self.assertEqual(tkn.location.line_start, 0)
+            self.assertEqual(tkn.location.col_start, col)
             self.assertEqual(tkn.location.length, len(kwd.value))
             self.assertEqual(tkn.location.line_str, test_content)
             col += 1 + len(kwd.value)
@@ -95,8 +95,8 @@ class TestLexer(unittest.TestCase):
         for bit, tkn in zip(BuildInType, tokens):
             self.assertEqual(bit, tkn.type)
             self.assertEqual(tkn.location.file_name, "test_file")
-            self.assertEqual(tkn.location.line, 0)
-            self.assertEqual(tkn.location.col, col)
+            self.assertEqual(tkn.location.line_start, 0)
+            self.assertEqual(tkn.location.col_start, col)
             self.assertEqual(tkn.location.length, len(bit.value))
             self.assertEqual(tkn.location.line_str, test_content)
             col += 1 + len(bit.value)

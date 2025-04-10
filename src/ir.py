@@ -28,7 +28,7 @@ BinaryOpToInstruction: Dict[Operator, type[IRBinaryInstruction]] = {
     Operator.SHIFT_LEFT: IRInstShiftLeftLogical,
 }
 
-no_location = CodeLocation("phony", 0, 0, 0, "")
+no_location = CodeLocation("phony", 0, 0, 0, 1)
 
 
 class IRContext:

@@ -17,13 +17,36 @@ def simple_error(msg: str):
 
 
 def get_error_with_line_info(header: str, title: str, location: CodeLocation, err_msg: str, hint: str = "") -> str:
+    with open(location.file_name) as file:
+        line_str_array = file.readlines()[location.line_start:location.line_stop+1]
+
     msg = "\n"
-    msg += f"[{header}] {title} [{location.file_name}:{location.line + 1}:{location.col}]:\n"
-    line_number_space = " " * (len(str(location.line + 1)) + 2)
+    msg += f"[{header}] {title} [{location.file_name}:{location.line_start + 1}:{location.col_start + 1}]:\n"
+    line_number_digits = len(str(location.line_stop + 1))
+    line_number_space = " " * (line_number_digits + 2)
     msg += f"{line_number_space}|\n"
-    msg += f" {location.line + 1} | {location.line_str}\n"
-    msg += f"{line_number_space}| " + " " * location.col + "^" * location.length + "\n"
-    msg += f"{line_number_space}  " + " " * location.col + err_msg + "\n"
+    blank_line = False
+    for line_nr in range(location.line_start, location.line_stop + 1):
+        line_str = line_str_array[line_nr - location.line_start].rstrip()
+        if line_str == "":
+            if not blank_line:
+                msg += f" <snip> ...\n"
+                blank_line = True
+            continue
+        msg += f" {line_nr + 1:0{line_number_digits}} | {line_str}\n"
+        if line_nr == location.line_start and line_nr == location.line_stop:
+            msg += f"{line_number_space}| " + " " * location.col_start + "^" * (location.col_stop - location.col_start + 1) + "\n"
+        elif line_nr == location.line_start:
+            msg += f"{line_number_space}| " + " " * location.col_start + "^" * (len(line_str) - location.col_start) + "\n"
+        elif line_nr == location.line_stop:
+            msg += f"{line_number_space}| " + "^" * (location.col_stop + 1) + "\n"
+        else:
+            msg += f"{line_number_space}| " + "^" * len(line_str) + "\n"
+        blank_line = False
+    if location.line_start == location.line_stop:
+        msg += f"{line_number_space}  " + " " * location.col_start + err_msg + "\n"
+    else:
+        msg += f"{line_number_space}  " + err_msg + "\n"
     if len(hint) > 0:
         msg += f"Hint: {hint}\n"
     return msg
@@ -147,7 +170,7 @@ class JTLTypeErrorType(Enum):
     TYPE_MISSMATCH_DECLARATION = ("Type Error", "Declared type {} does not match expression type {}")
     NO_VALUE_TYPE = ("Missing Value", "Expression returns no value for {} to operate on")
     POINTER_ARITHMETIC = ("Invalid Operation", "arithmetic operations on pointers is forbidden")
-    NOT_NUMERIC = ("Not a numeric type", "cannot do arithmetic on non-numeric type")
+    NOT_NUMERIC = ("Not a numeric type", "cannot do arithmetic on non-numeric type ({})")
     NOT_NUMERIC_COMPARE = ("Not a numeric type", "cannot compare non-numeric type")
     INCOMPATIBLE_TYPE_GROUP = ("Incompatible type", "{} is incompatible with type {}")
     UNSAFE_AUTOMATIC_CAST = ("Incompatible type", "{} and {} can not be promoted to an int that can hold all values")
@@ -160,12 +183,15 @@ class JTLTypeErrorType(Enum):
     DEREFERENCE_VALUE = ("Incompatible type", "Can not dereference value of type {} as it is not a pointer")
     EXPECTED_BOOLEAN_CONDITION = ("Unexpected type", "Condition must return/be a boolean value not {}")
     TYPE_MISSMATCH_RETURN = ("Type Error", "Returned value of type {}, expected a value of {}")
-    BIT_OPERATOR_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
+    BIT_OPERATOR_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value, ({} {} {})"
                                                  " transmute floats if necessary")
-    BIT_OPERATOR_SIZE_MISSMATCH = ("Type Error", "Both operands must have the same size in bits")
-    BIT_OPERATOR_SIGNED_UNSIGNED = ("Type Error", "Both operands must be either signed or unsigned")
-    SHIFT_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value,"
+    UNARY_BIT_OPERATOR_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value of type {}, "
+                                                 " transmute floats if necessary")
+    BIT_OPERATOR_SIZE_MISSMATCH = ("Type Error", "Both operands must have the same size in bits ({} vs {} bytes)")
+    BIT_OPERATOR_SIGNED_UNSIGNED = ("Type Error", "Both operands must be either signed or unsigned ({} {} {})")
+    SHIFT_ON_NON_INTEGER = ("Type Error", "Cannot use {} on non-integer value of type {},"
                                           " transmute floats if necessary")
+    SHIFT_BY_NON_INTEGER = ("Type Error", "Cannot shift by value of type {}")
     TRANSMUTE_UNRESOLVED_SIZE = ("Missing Type", "To transmute the size of the source type must be known."
                                                  " (It is currently not enough that the type can be inferred later)")
     TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")

@@ -21,6 +21,9 @@ class ASTNode:
     def __str__(self):
         return f"ASTNode<{self.token}>"
 
+    def get_location(self) -> CodeLocation:
+        return self.token.location
+
 
 @dataclass(slots=True)
 class ASTNodeValue(ASTNode):
@@ -66,6 +69,9 @@ class ASTNodeBinary(ASTNode):
     def __str__(self) -> str:
         return f"({self.token.op.value} {self.left} {self.right})"
 
+    def get_location(self) -> CodeLocation:
+        return self.left.get_location().span(self.right.get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeUnary(ASTNode):
@@ -78,6 +84,9 @@ class ASTNodeUnary(ASTNode):
     def __str__(self) -> str:
         return f"(<- {self.token.op.value} {self.child})"
 
+    def get_location(self) -> CodeLocation:
+        return self.token.location.span(self.child.get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeUnaryRight(ASTNode):
@@ -89,6 +98,9 @@ class ASTNodeUnaryRight(ASTNode):
 
     def __str__(self) -> str:
         return f"(-> {self.token.op.value} {self.child})"
+
+    def get_location(self) -> CodeLocation:
+        return self.token.location.span(self.child.get_location())
 
 
 @dataclass(slots=True)
@@ -107,6 +119,12 @@ class ASTNodeTupleLike(ASTNode):
             case TokenBracket():
                 return f"({self.token.type} {self.parent} [{" ".join(map(str, self.children))}])"
 
+    def get_location(self) -> CodeLocation:
+        if len(self.children) == 0:
+            return self.token.location
+        else:
+            return self.token.location.span(self.children[-1].get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeScope(ASTNode):
@@ -120,6 +138,11 @@ class ASTNodeScope(ASTNode):
         lines = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return "Scope:\n  " + "\n  ".join(lines)
 
+    def get_location(self) -> CodeLocation:
+        if len(self.body) == 0:
+            return self.token.location
+        else:
+            return self.token.location.span(self.body[-1].get_location())
 
 @dataclass(slots=True)
 class ASTNodeRecord(ASTNode):
@@ -131,6 +154,12 @@ class ASTNodeRecord(ASTNode):
     def __str__(self) -> str:
         lines = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return "(Record\n  " + "\n  ".join(lines) + ")"
+
+    def get_location(self) -> CodeLocation:
+        if len(self.body) == 0:
+            return self.token.location
+        else:
+            return self.token.location.span(self.body[-1].get_location())
 
 
 @dataclass(slots=True)
@@ -149,6 +178,9 @@ class ASTNodeIf(ASTNode):
         else_body = "\n   ".join(str(self.else_body).splitlines())
         return f"(if {self.condition}\n body:\n   {body}\n else:\n   {else_body}\n)"
 
+    def get_location(self) -> CodeLocation:
+        return self.token.location.span(self.condition.get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeWhile(ASTNode):
@@ -163,6 +195,11 @@ class ASTNodeWhile(ASTNode):
     def __str__(self) -> str:
         body = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return f"(while {self.condition}\n body:\n   {'\n   '.join(body)}\n)"
+
+    def get_location(self) -> CodeLocation:
+        if len(self.body) == 0:
+            return self.token.location
+        return self.token.location.span(self.condition.get_location())
 
 
 @dataclass(slots=True)
@@ -182,6 +219,14 @@ class ASTNodeProcedure(ASTNode):
         body = itertools.chain.from_iterable(map(lambda x: str(x).splitlines(), self.body))
         return f"(proc [{', '.join(map(str, self.arguments))}] {self.return_type_expr}\n body:\n   {'\n  '.join(body)}\n)"
 
+    def get_location(self) -> CodeLocation:
+        if self.return_type_expr is not None:
+            return self.token.location.span(self.return_type_expr.get_location())
+        elif len(self.arguments) == 0:
+            return self.token.location
+        return self.token.location.span(self.arguments[-1].get_location())
+
+
 
 @dataclass(slots=True)
 class ASTNodeProcedureStub(ASTNode):
@@ -197,6 +242,13 @@ class ASTNodeProcedureStub(ASTNode):
     def __str__(self) -> str:
         return f"(proc_stub [{', '.join(map(str, self.arguments))}] {self.return_type_expr})\n"
 
+    def get_location(self) -> CodeLocation:
+        if self.return_type_expr is not None:
+            return self.token.location.span(self.return_type_expr.get_location())
+        elif len(self.arguments) == 0:
+            return self.token.location
+        return self.token.location.span(self.arguments[-1].get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeStatement(ASTNode):
@@ -209,6 +261,11 @@ class ASTNodeStatement(ASTNode):
     def __str__(self) -> str:
         return f"({self.token.keyword.value} {self.child})"
 
+    def get_location(self) -> CodeLocation:
+        if self.child is None:
+            return self.token.location
+        return self.token.location.span(self.child.get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeCast(ASTNode):
@@ -220,6 +277,9 @@ class ASTNodeCast(ASTNode):
     def __str__(self) -> str:
         return f"(cast {self.type} {self.child})"
 
+    def get_location(self) -> CodeLocation:
+        return self.token.location.span(self.child.get_location())
+
 
 @dataclass(slots=True)
 class ASTNodeTransmute(ASTNode):
@@ -230,6 +290,9 @@ class ASTNodeTransmute(ASTNode):
 
     def __str__(self) -> str:
         return f"(transmute {self.type} {self.child})"
+
+    def get_location(self) -> CodeLocation:
+        return self.token.location.span(self.child.get_location())
 
 
 @dataclass(slots=True)
@@ -244,6 +307,9 @@ class ASTNodeAssignment(ASTNode):
     def __str__(self):
         return f"(ASSIGN {self.target} = {self.expression})"
 
+    def get_location(self) -> CodeLocation:
+        return self.node.get_location()
+
 
 @dataclass(slots=True)
 class ASTNodeCall(ASTNode):
@@ -255,6 +321,11 @@ class ASTNodeCall(ASTNode):
 
     def __str__(self):
         return f"(call {self.procedure.name} ({", ".join(map(str, self.arguments))})"
+
+    def get_location(self) -> CodeLocation:
+        if len(self.arguments) == 0:
+            return self.token.location
+        return self.token.location.span(self.arguments[-1].get_location())
 
 
 # associativity is encoded by biasing the binding power

@@ -4,13 +4,13 @@ from typing import Iterable
 
 from ast_types import *
 from lexer_types import *
-from errors import ParserError, ParserErrorType
+from errors import ParserError, ParserErrorType, get_error_with_line_info
 from utils import PeakableIterator
 
 
 class PeakableTokenIterator(PeakableIterator):
     def __init__(self, it: Iterable[Token]):
-        super().__init__(it, TokenNewLine(CodeLocation("SENTINEL", 0, 0, 1, "")))
+        super().__init__(it, TokenNewLine(CodeLocation("SENTINEL", 0, 0, 0, 1)))
 
     def peak(self) -> Token:
         try:
@@ -174,7 +174,8 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
             nodes = parse_tuple_like(it, lhs_token)
             if len(nodes) == 0:
                 # TODO make location a span over all the lines of (...)
-                raise ParserError.from_type(ParserErrorType.EMPTY_TUPLE, lhs_token.location)
+                assert it.last is not None
+                raise ParserError.from_type(ParserErrorType.EMPTY_TUPLE, lhs_token.location.span(it.last.location))
             elif len(nodes) == 1:
                 lhs = nodes[0]
             else:

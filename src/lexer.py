@@ -34,13 +34,13 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
             Current location of the lexer as CodeLocation object
         """
         if it.last is None:
-            return CodeLocation(file_name, line_nr, 0, length, "")
+            return CodeLocation(file_name, line_nr, line_nr, 0, 0)
         if start_col is None:
             if it.last is None:
-                return CodeLocation(file_name, line_nr, 0, length, "")
+                return CodeLocation(file_name, line_nr, line_nr, 0, 0)
             else:
                 start_col = it.last[0]
-        return CodeLocation(file_name, line_nr, start_col, length, line)
+        return CodeLocation(file_name, line_nr, line_nr, start_col, start_col + length)
 
     def append_multi_char_op(secondaries: List[str], operator_none: Operator, operators: List[Operator]):
         nxt = it.peak()[1]
@@ -56,18 +56,18 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
         loc = location()
         while it.peak()[1] != "\"":
             col_nr, char = it.next()
-        loc.length = col_nr - loc.col + 2
+        loc.length = col_nr - loc.col_start + 2
         if it.peak()[1] != "\"":
             raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
         col_nr, char = it.next()
-        tokens.append(TokenStringLiteral(loc, line[loc.col + 1:col_nr], zero_terminated))
+        tokens.append(TokenStringLiteral(loc, line[loc.col_start + 1:col_nr], zero_terminated))
 
 
     file_lines = file_contents.splitlines()
 
     # ensures the parser gets a NewLineToken
     if len(file_lines) == 0:
-        return [TokenNewLine(CodeLocation(file_name, 0, 0, 1, ""))]
+        return [TokenNewLine(CodeLocation(file_name, 0, 0, 0, 1))]
 
     tokens: List[Token] = []
     multi_line_comment = False
@@ -87,8 +87,8 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 loc = location()
                 while ud.category(it.peak()[1]) in {'Ll', 'Lu', 'Lo', 'Nd'} or it.peak()[1] == "_":
                     col_nr, char = it.next()
-                loc.length = col_nr - loc.col + 1
-                name = line[loc.col:col_nr + 1]
+                loc.col_stop = col_nr
+                name = line[loc.col_start:col_nr + 1]
                 match name:
                     case "var":
                         tokens.append(TokenKeyword(loc, Keyword.VARIABLE))
@@ -189,8 +189,8 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                 if it.peak()[1] == ".":
                     finish_parsing_float(it, line, loc, tokens)
                 else:
-                    loc.length = col_nr - loc.col + 1
-                    tokens.append(TokenNumberLiteral(loc, int(line[loc.col:col_nr + 1])))
+                    loc.col_stop = col_nr
+                    tokens.append(TokenNumberLiteral(loc, int(line[loc.col_start:col_nr + 1])))
             elif char == "\"":
                 lex_string_literal(col_nr)
             elif char == "(":
@@ -270,5 +270,5 @@ def finish_parsing_float(it: PeakableIterator, line: str, loc: CodeLocation, tok
     col_nr, char = it.next()
     while ud.category(it.peak()[1]) in {'Nd'}:
         col_nr, char = it.next()
-    loc.length = col_nr - loc.col + 1
-    tokens.append(TokenNumberLiteral(loc, float(line[loc.col:col_nr + 1])))
+    loc.col_stop = col_nr
+    tokens.append(TokenNumberLiteral(loc, float(line[loc.col_start:col_nr + 1])))

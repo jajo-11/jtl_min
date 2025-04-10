@@ -91,7 +91,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
 
     for inst in chain(procedure.alloc_instructions, procedure.instructions):
         if not isinstance(inst, (IRInstLabel, IRInstPHI)):
-            out_file.write(f"   dbgloc {inst.location.line}, {inst.location.col}\n")
+            out_file.write(f"   dbgloc {inst.location.line_start}, {inst.location.col_start}\n")
         match inst:
             case IRInstLabel():
                 out_file.write(f"@label.{inst.name}\n")

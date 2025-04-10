@@ -4,19 +4,31 @@ from enum import Enum
 @dataclass(slots=True)
 class CodeLocation:
     file_name: str
-    line: int
-    col: int
-    length: int
-    line_str: str
+    line_start: int
+    line_stop: int
+    col_start: int
+    col_stop: int
 
-    def whole_line(self) -> "CodeLocation":
-        # FIXME: assume all uses as a bug and implement proper CodeLocationRanges
-        # This should include multi-line locations and a recursive function for all
-        # ast nodes to determine the full extend of a node
-        return CodeLocation(self.file_name, self.line, 0, len(self.line_str), self.line_str)
+    def span(self, other: "CodeLocation") -> "CodeLocation":
+        assert self.file_name == other.file_name
+        start, stop = self, other
+        if start.line_start > stop.line_start:
+            start, stop = stop, start
+        elif start.line_start == stop.line_start and start.col_start > stop.col_start:
+            start, stop = stop, start
+        col_stop = stop.col_stop
+        if start.line_stop > stop.line_stop:
+            return start
+        elif start.line_stop == stop.line_stop and start.col_stop > stop.col_stop:
+            return start
+        return CodeLocation(self.file_name,
+                            start.line_start,
+                            stop.line_stop,
+                            start.col_start,
+                            stop.col_stop)
 
     def __str__(self):
-        return f"{self.file_name}:{self.line + 1}:{self.col + 1}"
+        return f"{self.file_name}:{self.line_start + 1}:{self.col_start + 1}"
 
 
 @dataclass
