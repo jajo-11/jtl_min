@@ -21,7 +21,7 @@ def eval_and_get_saved_ir(file_name: str) -> (str, str):
             stop_index = i
     target_ir = "\n".join(src_lines[start_index + 1:stop_index])
 
-    tokens = lex_file("test_file", src)
+    tokens = lex_file(file_name, src)
     exprs = parse_tokens(tokens)
     global_scope = elaborate.elaborate_module(exprs)
     ctx = IRContext(global_scope)

@@ -3,7 +3,8 @@ from typing import Tuple
 from ast_types import *
 from elaboration_types import Scope, Name, Record
 from typing_types import *
-from errors import ElaborationError, ElaborationErrorType, JTLTypeError, JTLTypeErrorType
+from errors import ElaborationError, ElaborationErrorType, JTLTypeError, JTLTypeErrorType, get_error_with_line_info
+from typing_types import TypeUInt, TypeFloat, TypeBool, TypePointer
 
 
 def elaborate_module(nodes: List[ASTNode]) -> Scope:
@@ -14,29 +15,23 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
     for i, t in enumerate(scope.type_table.table):
         if i == 0:  # skip sentinel
             continue
-        if isinstance(t, Type) and t.info.size is None:
-            match t.info.group:
-                case TypeGroup.TYPE | TypeGroup.NO_VALUE:
+        if isinstance(t, Type) and t.size is None:
+            match t:
+                case TypeType() | TypeNoValue() | TypeReturns():
                     pass
-                case TypeGroup.UNDEFINED:
+                case TypeUndefined():
                     raise RuntimeError("Found unresolved type in Type Table")
-                case TypeGroup.INT:
-                    scope.type_table.overwrite(i, Type(TypeType.I64))
-                case TypeGroup.UINT:
+                case TypeInt():
+                    scope.type_table.overwrite(i, BuildInType.I64)
+                case TypeUInt():
                     # unless the - unary is used all int literals start out as UINTs converting them to U64 would
                     # probably be surprising to the user when doing a - b etc. so if no information is available they
                     # get converted to I64
-                    scope.type_table.overwrite(i, Type(TypeType.I64))
-                case TypeGroup.FLOAT:
-                    scope.type_table.overwrite(i, Type(TypeType.F64))
-                case TypeGroup.BOOL:
-                    raise RuntimeError("Found boolean type with none size in Type Table")
-                case TypeGroup.SYMBOL:
-                    raise RuntimeError("Found symbol type with none size in Type Table")
-                case TypeGroup.POINTER:
-                    raise RuntimeError("Found pointer type with none size in Type Table")
-                case TypeGroup.RECORD:
-                    raise RuntimeError("Found compound type with none size in Type Table")
+                    scope.type_table.overwrite(i, BuildInType.I64)
+                case TypeFloat():
+                    scope.type_table.overwrite(i, BuildInType.F64)
+                case _:
+                    raise RuntimeError(f"Found type {t} with none size in Type Table")
 
     return scope
 
@@ -61,7 +56,8 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
                     raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
                                                      left.token.location)
                 record = Record(parent.unique_indexer.next(), node.child.right, left.token.name)
-                record_type = parent.type_table.new(TypeRecordType(record))
+                record_instance_type = parent.type_table.new(TypeRecord(None, record))
+                record_type = parent.type_table.new(TypeType(record_instance_type, parent.type_table))
                 name = Name(
                     parent.unique_indexer.next(),
                     left.token.name,
@@ -83,10 +79,11 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
 
     # third update size of record types (needed to elaborate the records first)
     # this also performs a cyclic dependency check
-    # FIXME: this is a bit odd this sets the size of the type to the size of the instance
     for record, node in records:
-        nt = parent.type_table.get(node.type)
-        nt.info.size = record.get_size()
+        ntt = parent.type_table.get(node.type)
+        assert isinstance(ntt, TypeType)
+        nt = parent.type_table.get(ntt.instance_type)
+        nt.size = record.get_size()
 
     # fourth process the constants - calls to procedures are not allowed for now (Constructors?)
     for node in constant_nodes:
@@ -123,9 +120,9 @@ def elaborate_scope(parent: Scope, nodes: List[ASTNode], returnable: Optional[AS
                 parent.body.append(elaborate_expression(parent, node, False, returnable))
 
         last_node_type = parent.type_table.get(parent.body[-1].type)
-        if last_node_type.info.group == TypeGroup.RETURNS and i != (len(nodes) - 1):
+        if isinstance(last_node_type, TypeReturns) and i != (len(nodes) - 1):
             raise ElaborationError.from_type(ElaborationErrorType.UNREACHABLE, nodes[-1].get_location())
-        if i == (len(nodes) - 1) and last_node_type.info.group != TypeGroup.RETURNS and returnable is not None:
+        if i == (len(nodes) - 1) and not isinstance(last_node_type, TypeReturns) and returnable is not None:
             return False
 
     # sixth procedures are elaborated last so that they can refer to them self
@@ -177,7 +174,7 @@ def elaborate_declaration(parent: Scope, node: ASTNode, constant: bool, returnab
 
     e_type = parent.type_table.get(e.type)
 
-    if e_type.info.group == TypeGroup.NO_VALUE:
+    if isinstance(e_type, TypeNoValue):
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_VALUE, node.get_location())
 
     if not narrow_type(parent.type_table, n.type, e.type):
@@ -226,13 +223,14 @@ def elaborate_name_and_type(parent: Scope, node: ASTNode) -> Name:
                     elaborate_type(parent, node.right), parent.type_table)
     elif isinstance(node, ASTNodeValue) and isinstance(node.token, TokenName):
         return Name(parent.unique_indexer.next(), node.token.name, node.get_location(),
-                    parent.type_table.new(Type()), parent.type_table)
+                    parent.type_table.new(TypeUndefined()), parent.type_table)
     else:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_NAME_DECLARATION,
                                          node.get_location())
 
 
 def elaborate_type(parent: Scope, node: ASTNode) -> int:
+    """This will return an index to an instance type (i.e. will not wrap the type in a TypeType"""
     pointer_to_mutable = []
     while True:
         match node:
@@ -243,8 +241,8 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
                 pointer_to_mutable.append(False)
                 node = node.child
             case ASTNodeValue() if isinstance(node.token, TokenBuildInType):
-                base_type_id = parent.type_table.new(Type(map_build_in_type_to_type_type[node.token.type]))
-                for mut in pointer_to_mutable:
+                base_type_id = parent.type_table.new_build_in_type(node.token.type)
+                for mut in reversed(pointer_to_mutable):
                     base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
                 return base_type_id
             case ASTNodeValue() if isinstance(node.token, TokenName):
@@ -252,44 +250,59 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
                 if name_obj is None:
                     raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME, node.get_location())
                 base_type = parent.type_table.get(name_obj.type)
-                if base_type.info.group != TypeGroup.TYPE:
+                if not isinstance(base_type, TypeType):
                     raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_DECLARATION, node.get_location(),
                                                  base_type)
-                base_type_id = name_obj.type
-                for mut in pointer_to_mutable:
+                base_type_id = base_type.instance_type
+                for mut in reversed(pointer_to_mutable):
                     base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
                 return base_type_id
             case ASTNodeArrayType():
-                # TODO make sure array_children are either int literals or int constants
-                raise NotImplementedError()
+                # TODO this is currently simplified should accept more than one dimension and dimension as constant and not just immediate
+                assert len(node.array_children) == 1
+                array_size = node.array_children[0]
+                array_size = elaborate_expression(parent, array_size, True, None, False)
+                array_size_type = parent.type_table.get(array_size.type)
+                if not (isinstance(array_size, ASTNodeValue) and isinstance(array_size.token, TokenNumberLiteral)
+                        and isinstance(array_size.token.value, int)):
+                    raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, array_size.get_location(),
+                                                 array_size_type)
+                if array_size.token.value <= 0:
+                    raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, array_size.get_location())
+                base_type_id = elaborate_type(parent, node.type_expression)
+                base_type_id = parent.type_table.new(TypeFixedSizeArray(array_size.token.value, base_type_id,
+                                                                   parent.type_table))
+                for mut in reversed(pointer_to_mutable):
+                    base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
+                return base_type_id
             case _:
                 raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_TYPE, node.get_location())
 
 
-def is_numeric(type: Type) -> bool:
-    return type.info.group in (TypeGroup.INT, TypeGroup.FLOAT, TypeGroup.UINT)
+def is_numeric(t: Type) -> bool:
+    return isinstance(t, (TypeInt, TypeUInt, TypeFloat))
 
 
-def is_integer(type: Type) -> bool:
-    return type.info.group in (TypeGroup.INT, TypeGroup.UINT)
+def is_integer(t: Type) -> bool:
+    return isinstance(t, (TypeInt, TypeUInt))
 
 
 def check_assignable(node: ASTNode, parent: Scope):
     """ensure that is indeed assignable, raises ElaborationError"""
     current_node = node
-    last_mutable: Optional[bool] = None
+    mutable_pointer: Optional[bool] = None
     while True:
         match current_node:
             case ASTNodeValue(token=nt) if isinstance(nt, TokenName):
                 if (name := parent.lookup(nt.name)) is None:
                     raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME, nt.location)
 
-                if last_mutable is None:
+                if mutable_pointer is None:
                     if name.mut != Mutability.MUTABLE:
                         raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
                                                          nt.location,
                                                          name.mut)
-                elif not last_mutable:
+                elif not mutable_pointer:
                     raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
                                                      nt.location)
 
@@ -297,7 +310,8 @@ def check_assignable(node: ASTNode, parent: Scope):
             case ASTNodeUnaryRight(token=top) if top.op == Operator.POINTER:
                 child_type = parent.type_table.get(current_node.child.type)
                 assert isinstance(child_type, TypePointer)
-                last_mutable = child_type.target_mutable
+                if mutable_pointer is None:
+                    mutable_pointer = child_type.target_mutable
                 current_node = current_node.child
             case ASTNodeBinary(token=dot) if dot.op == Operator.DOT:
                 lhs_type = parent.type_table.get(current_node.left.type)
@@ -306,7 +320,7 @@ def check_assignable(node: ASTNode, parent: Scope):
                         raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
                                                          node.get_location())
                     lhs_type = parent.type_table.get(lhs_type.target_type)
-                assert isinstance(lhs_type, TypeRecordInstance)  # or isinstance(lhs_type, TypePointer) and
+                assert isinstance(lhs_type, TypeRecord)  # or isinstance(lhs_type, TypePointer) and
                 assert isinstance(current_node.right, ASTNodeValue) and isinstance(current_node.right.token, TokenName)
                 if (m := lhs_type.record.fields[current_node.right.token.name].mut) != Mutability.MUTABLE:
                     raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
@@ -323,7 +337,7 @@ def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     lhs_type = parent.type_table.get(lhs.type)
     if isinstance(lhs_type, TypePointer):
         lhs_type = parent.type_table.get(lhs_type.target_type)
-    if not isinstance(lhs_type, TypeRecordInstance):
+    if not isinstance(lhs_type, TypeRecord):
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_RECORD, lhs.token.location)
     if not (isinstance(node.right, ASTNodeValue) and isinstance(node.right.token, TokenName)):
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_FIELD_NAME, node.right.token.location)
@@ -366,16 +380,16 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_ON_NON_INTEGER,
                                                      node.get_location(), str(node.token.op), str(lt),
                                                      str(node.token.op), str(rt))
-                    if lt.info.size is None:
+                    if lt.size is None:
                         parent.type_table.overwrite(node.left.type, node.right.type)
                         lt = rt
-                    elif rt.info.size is None:
+                    elif rt.size is None:
                         parent.type_table.overwrite(node.right.type, node.left.type)
                         rt = lt
-                    if lt.info.size != rt.info.size:
+                    if lt.size != rt.size:
                         raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_SIZE_MISSMATCH,
-                                                     node.get_location(), lt.info.size, rt.info.size)
-                    if lt.info.group != rt.info.group:
+                                                     node.get_location(), lt.size, rt.size)
+                    if type(lt) != type(rt):
                         raise JTLTypeError.from_type(JTLTypeErrorType.BIT_OPERATOR_SIGNED_UNSIGNED,
                                                      node.get_location(), str(lt), node.token.op, str(rt))
                     node.type = node.left.type
@@ -390,15 +404,15 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     node.type = node.left.type
                     return node
                 case Operator.EQUAL | Operator.NOTEQUAL:
-                    node.type = parent.type_table.new(Type(TypeType.BOOL))
+                    node.type = parent.type_table.new_build_in_type(BuildInType.BOOL)
                     if is_numeric(lt) and is_numeric(rt):
                         node.left, node.right = promote_either(parent.type_table, node.left, node.right)
                         return node
-                    if lt.info.group != rt.info.group:
+                    if type(lt) != type(rt):
                         raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE,
                                                      node.get_location(),
                                                      lt, rt)
-                    if lt.info.group in {TypeGroup.BOOL, TypeGroup.SYMBOL}:
+                    if isinstance(lt, TypeBool):
                         return node
                     if isinstance(lt, TypePointer) and isinstance(rt, TypePointer):
                         if lt == rt:
@@ -407,7 +421,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                             raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE,
                                                          node.get_location(),
                                                          lt, rt)
-                    if lt.info.group in {TypeGroup.RECORD, TypeGroup.POINTER, TypeGroup.TYPE}:
+                    if isinstance(lt, (TypeRecord, TypeType, TypeProcedure)):
                         # TODO compound aka strings, types, procedures
                         raise NotImplementedError()
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.get_location(),
@@ -416,7 +430,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     if (is_numeric(parent.type_table.get(node.left.type))
                             and is_numeric(parent.type_table.get(node.right.type))):
                         node.left, node.right = promote_either(parent.type_table, node.left, node.right)
-                        node.type = parent.type_table.new(Type(TypeType.BOOL))
+                        node.type = parent.type_table.new_build_in_type(BuildInType.BOOL)
                         return node
                     else:
                         raise JTLTypeError.from_type(JTLTypeErrorType.NOT_NUMERIC, node.get_location(),
@@ -424,7 +438,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                      parent.type_table.get(node.right.type))
                 case Operator.AND | Operator.OR:
                     at, bt = parent.type_table.get(node.left.type), parent.type_table.get(node.right.type)
-                    if at.info.group == TypeGroup.BOOL and bt.info.group == TypeGroup.BOOL:
+                    if isinstance(at, TypeBool) and isinstance(bt, TypeBool):
                         node.type = node.left.type
                         return node
                     raise JTLTypeError.from_type(JTLTypeErrorType.NOT_COMPARABLE, node.get_location(),
@@ -476,13 +490,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         raise JTLTypeError.from_type(JTLTypeErrorType.NOT_NUMERIC, node.get_location(), ot)
                 case Operator.MINUS:
                     if is_numeric(ot):
-                        if ot.info.group == TypeGroup.UINT:
-                            if ot.info.size is None:
-                                parent.type_table.overwrite(operand.type, Type(TypeType.INT_LITERAL))
+                        if isinstance(ot, TypeUInt):
+                            if ot.size is None:
+                                parent.type_table.overwrite(operand.type, parent.type_table.int_literal)
                                 node.type = operand.type
-                            elif ot.info.size < 8:
+                            elif ot.size < 8:
                                 cast = ASTNodeCast(node.token, operand)
-                                cast.type = parent.type_table.new(Type(upgrade_int_size[ot.info.size]))
+                                cast.type = parent.type_table.new_larger_int(ot.size)
                                 node.child = cast
                                 node.type = cast.type
                             else:
@@ -494,7 +508,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     else:
                         raise JTLTypeError.from_type(JTLTypeErrorType.NOT_NUMERIC, node.get_location(), ot)
                 case Operator.NOT:
-                    if ot.info.group != TypeGroup.BOOL:
+                    if not isinstance(ot, TypeBool):
                         raise JTLTypeError.from_type(JTLTypeErrorType.UNSAFE_UINT_TO_INT, node.token.location,
                                                      Operator.NOT, ot)
                     node.type = operand.type
@@ -513,7 +527,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                                       name_of_target.mut == Mutability.MUTABLE,
                                                                       parent.type_table))
                         return node
-                    elif isinstance(ot, TypeRecordInstance):
+                    elif isinstance(ot, TypeRecord):
                         node.type = parent.type_table.new(TypePointer(operand.type, True, parent.type_table))
                         return node
                     elif isinstance(operand, ASTNodeBinary) and operand.token.op == Operator.DOT:
@@ -553,29 +567,29 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                  parent.type_table.get(node.child.type),
                                                  parent.type_table.get(rt.return_type))
 
-                node.type = parent.type_table.new(Type(TypeType.RETURNS))
+                node.type = parent.type_table.new(TypeReturns())
                 return node
             raise ElaborationError.from_type(ElaborationErrorType.UNEXPECTED_STATEMENT, node.token.location)
         case ASTNodeValue():
             match node.token:
                 case TokenNumberLiteral():
                     if isinstance(node.token.value, int):
-                        node.type = parent.type_table.new(Type(TypeType.UINT_LITERAL))
+                        node.type = parent.type_table.new(parent.type_table.uint_literal)
                         return node
                     elif isinstance(node.token.value, float):
-                        node.type = parent.type_table.new(Type(TypeType.FLOAT_LITERAL))
+                        node.type = parent.type_table.new(parent.type_table.float_literal)
                         return node
                     else:
                         raise RuntimeError(f"Bad Number literal {node}")
                 case TokenStringLiteral():
                     if node.token.zero_terminated:
-                        t = parent.type_table.new(Type(TypeType.CHAR))
+                        t = parent.type_table.new_build_in_type(BuildInType.CHAR)
                         node.type = parent.type_table.new(TypePointer(t, False, parent.type_table))
                     else:
-                        node.type = parent.type_table.new(Type(TypeType.STRING))
+                        node.type = parent.type_table.new_build_in_type(BuildInType.STRING)
                     return node
                 case TokenBoolLiteral():
-                    node.type = parent.type_table.new(Type(TypeType.BOOL))
+                    node.type = parent.type_table.new_build_in_type(BuildInType.BOOL)
                     return node
                 case TokenName():
                     if (name_obj := parent.lookup(node.token.name)) is None:
@@ -587,12 +601,12 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     node.type = name_obj.type
                     return node
                 case TokenBuildInType():
-                    node.type = parent.type_table.new(Type(TypeType.TYPE))
+                    node.type = parent.type_table.new_build_in_type(BuildInType.TYPE)
                     return node
         case ASTNodeIf():
             node.condition = elaborate_expression(parent, node.condition, constant, returnable)
             condition_type = parent.type_table.get(node.condition.type)
-            if condition_type.info.group != TypeGroup.BOOL:
+            if not isinstance(condition_type, TypeBool):
                 raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_BOOLEAN_CONDITION, node.condition.token.location,
                                              condition_type)
             node.body = elaborate_expression(parent, node.body, constant, returnable)
@@ -600,29 +614,29 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 node.else_body = elaborate_expression(parent, node.else_body, constant, returnable)
                 at = parent.type_table.get(node.body.type)
                 bt = parent.type_table.get(node.else_body.type)
-                if at.info.group == TypeGroup.RETURNS and bt.info.group == TypeGroup.RETURNS:
+                if isinstance(at, TypeReturns) and isinstance(bt, TypeReturns):
                     node.type = node.body.type
-                elif at.info.group == TypeGroup.RETURNS:
+                elif isinstance(at, TypeReturns):
                     node.type = node.else_body.type
-                elif bt.info.group == TypeGroup.RETURNS:
+                elif isinstance(bt, TypeReturns):
                     node.type = node.body.type
                 else:
                     node.body, node.else_body = promote_either(parent.type_table, node.body, node.else_body)
                     node.type = node.body.type
             else:
-                node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
+                node.type = parent.type_table.new(TypeNoValue())
             return node
         case ASTNodeWhile():
             node.condition = elaborate_expression(parent, node.condition, constant, returnable)
             condition_type = parent.type_table.get(node.condition.type)
-            if condition_type.info.group != TypeGroup.BOOL:
+            if not isinstance(condition_type, TypeBool):
                 raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_BOOLEAN_CONDITION, node.condition.token.location,
                                              condition_type)
             node.elaborated_body = Scope(parent)
             if elaborate_scope(node.elaborated_body, node.body, returnable):
-                node.type = parent.type_table.new(Type(TypeType.RETURNS))
+                node.type = parent.type_table.new(TypeReturns())
             else:
-                node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
+                node.type = parent.type_table.new(TypeNoValue())
             return node
         case ASTNodeProcedure() | ASTNodeProcedureStub():
             arguments = []
@@ -638,7 +652,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     node.var_args = True
                     break
                 arguments.append(elaborate_name_and_type(parent, arg))
-                if parent.type_table.get(arguments[-1].type).info.group == TypeGroup.UNDEFINED:
+                if isinstance(parent.type_table.get(arguments[-1].type), TypeUndefined):
                     untyped.append(arguments[-1])
                 elif len(untyped) > 0:
                     collective_type = arguments[-1].type
@@ -651,7 +665,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             if node.return_type_expr is not None:
                 return_type = elaborate_type(parent, node.return_type_expr)
             else:
-                return_type = parent.type_table.new(Type(TypeType.NO_VALUE))
+                return_type = parent.type_table.new(TypeNoValue())
 
             node.argument_names = arguments
             node.type = parent.type_table.new(
@@ -679,9 +693,9 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             # TODO maybe scopes can return something
             node.elaborated_body = Scope(parent)
             if elaborate_scope(node.elaborated_body, node.body, returnable):
-                node.type = parent.type_table.new(Type(TypeType.RETURNS))
+                node.type = parent.type_table.new(TypeReturns())
             else:
-                node.type = parent.type_table.new(Type(TypeType.NO_VALUE))
+                node.type = parent.type_table.new(TypeNoValue())
             return node
         case ASTNodeTupleLike(parent=p) if p is not None:
             # This is a procedure call
@@ -701,10 +715,10 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     argument_list = proc_type.arguments
                     return_type = proc_type.return_type
                     varargs = proc_type.varargs
-                case TypeRecordType():
-                    argument_list = [field_name.type for field_name in proc_type.record.fields.values()]
-                    instance_type = parent.type_table.new(proc_type.to_instance_type())
-                    return_type = instance_type
+                case TypeType(instance_type=it_index) if isinstance(it := parent.type_table.get(it_index), TypeRecord):
+                    argument_list = [field_name.type for field_name in it.record.fields.values()]
+                    instance_type = it_index
+                    return_type = it_index
                 case _:
                     raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, p.token.location)
 
@@ -736,7 +750,9 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
 
             call.type = return_type
 
-            if isinstance(proc_type, TypeRecordType) and not direct_assignment:
+            if (isinstance(proc_type, TypeType)
+                    and isinstance(parent.type_table.get(proc_type.instance_type), TypeRecord)
+                    and not direct_assignment):
                 # TODO this is probably broken when records are nested...
                 uid = parent.unique_indexer.next()
                 name = Name(
@@ -782,17 +798,36 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             source_expr = elaborate_expression(parent, node.children[1], constant, returnable)
             source_type = parent.type_table.get(source_expr.type)
             # TODO if this is handled better later new checks for all the type groups have to be considered
-            if source_type.info.size is None:
+            if source_type.size is None:
                 raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_UNRESOLVED_SIZE,
                                              node.get_location())
             target_type_t = parent.type_table.get(target_type)
-            if source_type.info.size != target_type_t.info.size:
+            if source_type.size != target_type_t.size:
                 raise JTLTypeError.from_type(JTLTypeErrorType.TRANSMUTE_SIZE_MISSMATCH,
-                                             node.get_location(), target_type_t.info.size,
-                                             source_type.info.size)
+                                             node.get_location(), target_type_t.size,
+                                             source_type.size)
             rv_transmute = ASTNodeTransmute(tok_kw, source_expr)
             rv_transmute.type = target_type
             return rv_transmute
+        case ASTNodeTupleLike(token=bracket) if isinstance(bracket, TokenBracket) and bracket.type == BracketType.SQUARE:
+            assert node.parent is None
+            elaborated_children: List[ASTNode] = []
+            assumed_type: Optional[Type] = None
+            for child in node.children:
+                elaborated_children.append(elaborate_expression(parent, child, constant, returnable))
+                child_type = parent.type_table.get(elaborated_children[-1].type)
+                if assumed_type is None:
+                    assumed_type = child_type
+                elif assumed_type != child_type:
+                    assert len(elaborated_children) > 1
+                    elaborated_children[0], elaborated_children[-1] = promote_either(parent.type_table,
+                                                                                     elaborated_children[0],
+                                                                                     elaborated_children[-1])
+
+            node.children = elaborated_children
+            node.type = parent.type_table.new(TypeFixedSizeArray(len(elaborated_children), node.children[-1].type,
+                                                            parent.type_table))
+            return node
         case ASTNodeRecord():
             raise NotImplementedError("Inline records are not supported yet")
         case _:
@@ -805,8 +840,8 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
     bt = type_table.get(broad)
 
     # if narrow type is missing just use broad type (unless also undefined or no value)
-    if nt.info.group == TypeGroup.UNDEFINED:
-        if bt.info.group in {TypeGroup.UNDEFINED, TypeGroup.NO_VALUE}:
+    if isinstance(nt, TypeUndefined):
+        if isinstance(bt, (TypeUndefined, TypeNoValue)):
             return False
         type_table.overwrite(narrow, broad)
         return True
@@ -823,29 +858,26 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
         bt = type_table.get(broad)
 
     # if broad type already specific fail
-    if bt.info.size is not None:
+    if bt.size is not None:
         return False
 
     # everything after this point has a LITERAL in the bt
 
     # convert int literal to float
-    if nt.info.group == TypeGroup.FLOAT and bt.info.group == TypeGroup.INT:
+    if isinstance(nt, TypeFloat) and isinstance(bt, TypeInt):
         type_table.overwrite(broad, narrow)
         return True
 
     # convert uint literal to int
-    if nt.info.group == TypeGroup.INT and bt.info.group == TypeGroup.UINT:
+    if isinstance(nt, TypeInt) and isinstance(bt, TypeUInt):
         type_table.overwrite(broad, narrow)
         return True
 
-    if bt.info.group != nt.info.group and bt.info.group:
+    if type(nt) != type(bt):
         return False
 
     type_table.overwrite(broad, narrow)
     return True
-
-
-upgrade_int_size = {1: TypeType.I16, 2: TypeType.I32, 4: TypeType.I64}
 
 
 def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNode, ASTNode]:
@@ -856,23 +888,23 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
     # if same do nothing
     if at == bt:
         # if they are equal but not the same instance
-        if at is not bt:
+        if a.type != b.type:
             type_table.overwrite(a.type, b.type)
         return a, b
 
-    assert at.info.group != TypeGroup.UNDEFINED
-    assert bt.info.group != TypeGroup.UNDEFINED
+    assert not isinstance(at, TypeUndefined)
+    assert not isinstance(bt, TypeUndefined)
 
     # try to convert literals to more specific type
     if narrow_type(type_table, a.type, b.type) or narrow_type(type_table, b.type, a.type):
         return a, b
 
-    assert at.info.size is not None
-    assert bt.info.size is not None
+    assert at.size is not None
+    assert bt.size is not None
 
     # enlarge one type
-    if at.info.group == bt.info.group:
-        if at.info.size > bt.info.size:
+    if type(at) == type(bt):
+        if at.size > bt.size:
             cast = ASTNodeCast(b.token, b)
             cast.type = a.type
             return a, cast
@@ -882,38 +914,38 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
             return cast, b
 
     # integers to floats
-    if at.info.group == TypeGroup.FLOAT and is_numeric(bt):
+    if isinstance(at, TypeFloat) and is_numeric(bt):
         cast = ASTNodeCast(b.token, b)
         cast.type = a.type
         return a, cast
-    if bt.info.group == TypeGroup.FLOAT and is_numeric(at):
+    if isinstance(bt, TypeFloat) and is_numeric(at):
         cast = ASTNodeCast(a.token, a)
         cast.type = b.type
         return cast, b
 
     # uint to int if int is larger than uint
-    if at.info.group == TypeGroup.UINT and bt.info.group == TypeGroup.INT:
-        if at.info.size < bt.info.size:
+    if isinstance(at, TypeUInt) and isinstance(bt, TypeInt):
+        if at.size < bt.size:
             cast = ASTNodeCast(b.token, b)
             cast.type = a.type
             return a, cast
-        if at.info.size < 8 and bt.info.size < 8:
+        if at.size < 8 and bt.size < 8:
             cast_a = ASTNodeCast(a.token, a)
             cast_b = ASTNodeCast(b.token, b)
-            nt = type_table.new(Type(upgrade_int_size[at.info.size]))
+            nt = type_table.new_larger_int(at.size)
             cast_a.type = nt
             cast_b.type = nt
             return cast_a, cast_b
         raise JTLTypeError.from_type(JTLTypeErrorType.UNSAFE_AUTOMATIC_CAST, a.get_location(), at, bt)
-    if bt.info.group == TypeGroup.UINT and at.info.group == TypeGroup.INT:
-        if bt.info.size < at.info.size:
+    if isinstance(bt, TypeUInt) and isinstance(at, TypeInt):
+        if bt.size < at.size:
             cast = ASTNodeCast(a.token, a)
             cast.type = b.type
             return cast, b
-        if bt.info.size < 8 and at.info.size < 8:
+        if bt.size < 8 and at.size < 8:
             cast_a = ASTNodeCast(a.token, a)
             cast_b = ASTNodeCast(b.token, b)
-            nt = type_table.new(Type(upgrade_int_size[bt.info.size]))
+            nt = type_table.new_larger_int(bt.size)
             cast_a.type = nt
             cast_b.type = nt
             return cast_a, cast_b
@@ -922,16 +954,8 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
     raise JTLTypeError.from_type(JTLTypeErrorType.INCOMPATIBLE_TYPE_GROUP, a.get_location(), at, bt)
 
 
-castable_type_groups = {
-    TypeGroup.INT,
-    TypeGroup.UINT,
-    TypeGroup.FLOAT,
-    TypeGroup.BOOL,
-    TypeGroup.SYMBOL,
-    TypeGroup.POINTER,
-}
-
+castable_type_groups = (TypeInt, TypeUInt, TypeFloat, TypeBool, TypePointer)
 
 def can_cast(type_table: TypeTable, a: int, b: int) -> bool:
     at, bt = type_table.get(a), type_table.get(b)
-    return at.info.group in castable_type_groups and bt.info.group in castable_type_groups
+    return isinstance(at, castable_type_groups) and isinstance(bt, castable_type_groups)

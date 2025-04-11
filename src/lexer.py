@@ -56,11 +56,15 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
         loc = location()
         while it.peak()[1] != "\"":
             col_nr, char = it.next()
-        loc.col_stop = col_nr + 1
+        loc.col_stop = col_nr + 2
         if it.peak()[1] != "\"":
             raise LexerError.from_type(LexerErrorType.UNTERMINATED_STRING, loc)
         col_nr, char = it.next()
-        tokens.append(TokenStringLiteral(loc, line[loc.col_start + 1:col_nr], zero_terminated))
+        if zero_terminated:
+            loc.col_start -= 1  # include the c
+            tokens.append(TokenStringLiteral(loc, line[loc.col_start + 2:col_nr], zero_terminated))
+        else:
+            tokens.append(TokenStringLiteral(loc, line[loc.col_start + 1:col_nr], zero_terminated))
 
 
     file_lines = file_contents.splitlines()

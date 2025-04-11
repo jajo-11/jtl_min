@@ -7,8 +7,8 @@ from elaboration_types import Scope, Name, Record
 from ir_types import *
 from lexer_types import TokenNumberLiteral, TokenName, TokenStringLiteral, TokenBoolLiteral, Operator, Keyword, \
     TokenKeyword
-from typing_types import TypeGroup, PLATFORM_POINTER_SIZE, TypeRecordType, PLATFORM_BOOL_SIZE, TypeRecordInstance, \
-    TypeProcedure, TypePointer
+from typing_types import PLATFORM_POINTER_SIZE, PLATFORM_BOOL_SIZE, \
+    TypeProcedure, TypePointer, TypeNoValue, TypeInt, TypeUInt, TypeFloat, TypeBool, TypeRecord, TypeType, TypeReturns
 
 BinaryOpToInstruction: Dict[Operator, type[IRBinaryInstruction]] = {
     Operator.PLUS: IRInstAdd,
@@ -60,35 +60,32 @@ class IRContext:
 
     def type_to_ir_type(self, tt: int) -> Optional[IRType]:
         t = self.type_table.get(tt)
-        if t.info.group == TypeGroup.NO_VALUE:
+        if isinstance(t, TypeNoValue):
             return None
-        assert t.info.size is not None, "IR types can not be zero sized except NO_VALUE"
-        match t.info.group:
-            case TypeGroup.INT:
-                return IRTypeInt(t.info.size)
-            case TypeGroup.UINT:
-                return IRTypeUInt(t.info.size)
-            case TypeGroup.FLOAT:
-                return IRTypeFloat(t.info.size)
-            case TypeGroup.BOOL:
+        assert t.size is not None, "IR types can not be zero sized except NO_VALUE"
+        match t:
+            case TypeInt():
+                return IRTypeInt(t.size)
+            case TypeUInt():
+                return IRTypeUInt(t.size)
+            case TypeFloat():
+                return IRTypeFloat(t.size)
+            case TypeBool():
                 return IRTypeUInt(PLATFORM_BOOL_SIZE)
-            case TypeGroup.SYMBOL:
-                return IRTypeUInt(1)
-            case TypeGroup.POINTER:
+            case TypePointer():
                 return IRTypePointer(PLATFORM_POINTER_SIZE)
-            case TypeGroup.RECORD:
-                assert isinstance(t, TypeRecordType)
+            case TypeRecord():
                 record = self.unit.records.get(t.record)
                 assert record is not None
-                return IRTypeRecord(t.record.get_size(), record)
-            case TypeGroup.PROCEDURE:
+                return IRTypeRecord(t.size, record)
+            case TypeProcedure():
                 return IRTypePointer(PLATFORM_POINTER_SIZE)
-            case TypeGroup.TYPE:
+            case TypeType():
                 raise NotImplementedError()
-            case TypeGroup.RETURNS:
+            case TypeReturns():
                 raise RuntimeError("Lowering to IR should not encounter RETURNS type")
             case _:
-                raise RuntimeError(f"Un-handled type group {t.info.group}")
+                raise RuntimeError(f"Un-handled type {t}")
 
     def type_to_ir_type_not_none(self, tt: int) -> IRType:
         rv = self.type_to_ir_type(tt)
@@ -144,7 +141,7 @@ class IRContext:
         lt = self.type_table.get(node.left.type)
         if isinstance(lt, TypePointer):
             lt = self.type_table.get(lt.target_type)
-        assert isinstance(lt, TypeRecordInstance)
+        assert isinstance(lt, TypeRecord)
         assert isinstance(node.right, ASTNodeValue) and isinstance(node.right.token, TokenName)
         offsets = lt.record.get_offsets()
         field_nr = list(offsets.keys()).index(node.right.token.name)
@@ -173,7 +170,7 @@ class IRContext:
                         nn = scope.lookup(node.token.name)
                         assert nn is not None
                         ptr = self.variable_stack_register[nn]
-                        if isinstance(self.type_table.get(nn.type), TypeRecordInstance):
+                        if isinstance(self.type_table.get(nn.type), TypeRecord):
                             # if it is a record we only want the address
                             return ptr
                         else:
@@ -218,7 +215,7 @@ class IRContext:
                 base = self.ast_node_to_ir(node.left, scope)
                 assert isinstance(base, Register)
                 ptr_dest = self.get_ptr_to_field(node, base)
-                if isinstance(self.type_table.get(node.type), TypeRecordInstance):
+                if isinstance(self.type_table.get(node.type), TypeRecord):
                     return ptr_dest
                 else:
                     dest = self.new_temporary(node.type)
@@ -306,7 +303,7 @@ class IRContext:
                     assert value is not None
                     assert isinstance(dest, Register)
                     expr_type = self.type_table.get(node.expression.type)
-                    if isinstance(expr_type, TypeRecordInstance):
+                    if isinstance(expr_type, TypeRecord):
                         self.add_instruction(
                             IRInstMemcpy(node.token.location, dest, value, expr_type.record.get_size()))
                     else:
@@ -343,7 +340,7 @@ class IRContext:
                 tt = self.type_table.get(node.procedure.type)
                 if isinstance(tt, TypeProcedure):
                     proc = self.unit.procedures[node.procedure]
-                    if self.type_table.get(tt.return_type).info.group == TypeGroup.NO_VALUE:
+                    if isinstance(self.type_table.get(tt.return_type), TypeNoValue):
                         return_register = None
                     else:
                         return_register = self.new_temporary(tt.return_type)
@@ -351,13 +348,14 @@ class IRContext:
                     args = cast(List[Register | Immediate], arguments)
                     self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
                     return return_register
-                elif isinstance(tt, TypeRecordType):
+                elif isinstance(tt, TypeRecord):
+                    # TODO think if this check makes sense
                     raise RuntimeError("Should have been handled in assignment")
                 else:
                     raise RuntimeError("non callable called in ir generation")
             case ASTNodeIf():
                 return_type = self.type_table.get(node.type)
-                if return_type.info.group == TypeGroup.NO_VALUE:
+                if isinstance(return_type, TypeNoValue):
                     if_body = self.new_label(node.token.location, "if_body")
                     if node.else_body is not None:
                         if_else = self.new_label(node.token.location, "if_else")
@@ -484,12 +482,12 @@ class IRContext:
             self.current_procedures.pop()
 
         for s_name, o_name in scope.names.items():
-            if self.type_table.get(o_name.type).info.group in [TypeGroup.PROCEDURE, TypeGroup.TYPE]:
+            if isinstance(self.type_table.get(o_name.type), (TypeProcedure, TypeType)):
                 continue
             self.n_temporary += 1
             dest_type = self.type_to_ir_type_not_none(o_name.type)
             dest = Register(f"{self.n_temporary}_{s_name}", IRTypePointer(PLATFORM_POINTER_SIZE))
-            if isinstance(ri := self.type_table.get(o_name.type), TypeRecordInstance):
+            if isinstance(ri := self.type_table.get(o_name.type), TypeRecord):
                 align = ri.record.get_alignment()
             else:
                 align = dest_type.size

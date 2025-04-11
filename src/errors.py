@@ -16,9 +16,12 @@ def simple_error(msg: str):
     print(f"Error: {msg}")
 
 
-def get_error_with_line_info(header: str, title: str, location: CodeLocation, err_msg: str, hint: str = "") -> str:
-    with open(location.file_name) as file:
-        line_str_array = file.readlines()[location.line_start:location.line_stop+1]
+def get_error_with_line_info(header: str, title: str, location: CodeLocation, err_msg: str, hint: str = "", fd = None) -> str:
+    if fd is None:
+        with open(location.file_name) as file:
+            line_str_array = file.readlines()[location.line_start:location.line_stop+1]
+    else:
+        line_str_array = fd.readlines()[location.line_start:location.line_stop+1]
 
     msg = "\n"
     msg += f"[{header}] {title} [{location.file_name}:{location.line_start + 1}:{location.col_start + 1}]:\n"
@@ -197,6 +200,8 @@ class JTLTypeErrorType(Enum):
     TRANSMUTE_SIZE_MISSMATCH = ("Type Error", "Sizes in transmute must match have {} and {}")
     TYPE_MISSMATCH_ASSIGNMENT = ("Type Error", "Can not assign expression of type {} to value of type {}")
     NOT_A_TYPE = ("Type Error", "Expected a type here but got {}")
+    EXPECTED_INT_IMMEDIATE = ("Type Error", "Expected an integer literal but got {}")
+    EXPECTED_INT_LARGER_THAN_ZERO = ("Type Error", "Expected an integer larger than zero")
 
 
 @dataclass

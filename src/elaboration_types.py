@@ -4,7 +4,8 @@ from typing import Optional, Dict, List, Self, Any
 from ast_types import ASTNode, ASTNodeProcedure, ASTNodeRecord, ASTNodeProcedureStub
 from errors import ElaborationError, ElaborationErrorType
 from lexer_types import CodeLocation
-from typing_types import TypeTable, Mutability, TypeGroup, TypeRecordType
+from typing_types import TypeTable, Mutability, TypeUndefined, TypeReturns, TypeNoValue, TypeProcedure, TypeType, \
+    TypeRecord
 
 
 @dataclass(slots=True)
@@ -98,17 +99,16 @@ class Record:
             for fn, f in self.fields.items():
                 ft = f.type_table.get(f.type)
                 # these should not be possible
-                assert ft.info.group not in {TypeGroup.UNDEFINED, TypeGroup.RETURNS, TypeGroup.NO_VALUE}
+                assert not isinstance(ft, (TypeUndefined, TypeReturns, TypeNoValue))
                 # these might be necessary later but skip for now
-                assert ft.info.group not in {TypeGroup.PROCEDURE, TypeGroup.TYPE}
-                if ft.info.group == TypeGroup.RECORD:
-                    assert isinstance(ft, TypeRecordType)
+                assert not isinstance(ft, (TypeProcedure, TypeType))
+                if isinstance(ft, TypeRecord):
                     field_size = ft.record.get_size()
                     alignment = ft.record.get_alignment()
                 else:
-                    assert ft.info.size is not None
-                    alignment = ft.info.size
-                    field_size = ft.info.size
+                    assert ft.size is not None
+                    alignment = ft.size
+                    field_size = ft.size
                 max_alignment = max(max_alignment, alignment)
                 alignment_remainder = offset % alignment
                 if alignment_remainder != 0:

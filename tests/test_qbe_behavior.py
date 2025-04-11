@@ -34,7 +34,7 @@ def compile_and_run(test: unittest.TestCase, file_name: str) -> (str, str):
     target_std_output = "\n".join(src_lines[start_index_stdout + 1:stop_index_stdout])
     target_err_output = "\n".join(src_lines[start_index_stderr + 1:stop_index_stderr])
 
-    tokens = lex_file("test_file", src)
+    tokens = lex_file(file_name, src)
     exprs = parse_tokens(tokens)
     global_scope = elaborate.elaborate_module(exprs)
     ctx = IRContext(global_scope)

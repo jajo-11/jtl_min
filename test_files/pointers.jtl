@@ -1,3 +1,5 @@
+// TODO  make the pointers const by default and make you use mut if not
+
 const raw_increment = proc(value: ^int) {
     value^ = value^ + 1
 }
