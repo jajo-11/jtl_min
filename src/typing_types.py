@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict, List, Any, TYPE_CHECKING
+from typing import Optional, Dict, List, Any, TYPE_CHECKING, Tuple
 
 from lexer_types import BuildInType
 
@@ -234,16 +234,21 @@ class TypeTable:
                 return self.new_build_in_type(BuildInType.I64)
         raise RuntimeError()
 
-    def get(self, index: int) -> Type:
+    def get_with_table_index(self, index: int) -> Tuple[Type, int]:
         assert isinstance(index, int)
         new_index: Type | int = index
+        last_index = index
         counter = 0
         while isinstance(new_index, int):
             counter += 1
+            last_index = new_index
             new_index = self.table[new_index]
             if counter == 10000:
                 raise RuntimeError("Infinite Loop in type table")
-        return new_index
+        return new_index, last_index
+
+    def get(self, index: int) -> Type:
+        return self.get_with_table_index(index)[0]
 
     def overwrite(self, old: int, new: int | Type | BuildInType):
         if old <= 0:

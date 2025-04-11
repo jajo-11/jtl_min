@@ -697,7 +697,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             else:
                 node.type = parent.type_table.new(TypeNoValue())
             return node
-        case ASTNodeTupleLike(parent=p) if p is not None:
+        case ASTNodeTupleLike(token=bracket_token, parent=p) if (p is not None and isinstance(bracket_token, TokenBracket)
+                                                     and bracket_token.type == BracketType.ROUND):
             # This is a procedure call
             # TODO allow more complex situations like module.proc_name() or calling a just defined function
             if not (isinstance(p, ASTNodeValue) and isinstance(p.token, TokenName)):
@@ -809,7 +810,12 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             rv_transmute = ASTNodeTransmute(tok_kw, source_expr)
             rv_transmute.type = target_type
             return rv_transmute
-        case ASTNodeTupleLike(token=bracket) if isinstance(bracket, TokenBracket) and bracket.type == BracketType.SQUARE:
+        case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
+                                                 bracket.type == BracketType.SQUARE and parent is not None):
+            # Array member access
+            raise NotImplementedError()
+        case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
+                                                 bracket.type == BracketType.SQUARE and parent is None):
             assert node.parent is None
             elaborated_children: List[ASTNode] = []
             assumed_type: Optional[Type] = None
@@ -836,8 +842,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
 
 
 def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
-    nt = type_table.get(narrow)
-    bt = type_table.get(broad)
+    nt, ni = type_table.get_with_table_index(narrow)
+    bt, bi = type_table.get_with_table_index(broad)
 
     # if narrow type is missing just use broad type (unless also undefined or no value)
     if isinstance(nt, TypeUndefined):
@@ -848,7 +854,16 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
 
     # if same do nothing
     if bt == nt:
+        # only numeric literals might need to be coerced, to make sure type inference propagates we overwrite
+        if is_numeric(bt) and bt.size is None and ni != bi:
+            type_table.overwrite(broad, narrow)
         return True
+
+    # handle fixed size arrays
+    if isinstance(nt, TypeFixedSizeArray) and isinstance(bt, TypeFixedSizeArray):
+        if nt.size != bt.size:
+            return False
+        return narrow_type(type_table, nt.base_type, bt.base_type)
 
     # unwrap pointers
     while isinstance(nt, TypePointer) and isinstance(bt, TypePointer):
@@ -882,13 +897,13 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
 
 def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNode, ASTNode]:
     """Tries to make node a and b compatible for arithmetic, fails if unsafe cast is needed"""
-    at = type_table.get(a.type)
-    bt = type_table.get(b.type)
+    at, ai = type_table.get_with_table_index(a.type)
+    bt, bi = type_table.get_with_table_index(b.type)
 
     # if same do nothing
     if at == bt:
-        # if they are equal but not the same instance
-        if a.type != b.type:
+        # only numeric literals might need to be coerced, to make sure type inference propagates we overwrite
+        if is_numeric(bt) and bt.size is None and ai != bi:
             type_table.overwrite(a.type, b.type)
         return a, b
 
