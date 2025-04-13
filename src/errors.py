@@ -128,6 +128,7 @@ class ElaborationErrorType(Enum):
     NON_CONSTANT_IN_CONSTANT_EXPRESSION = ("Non-constant expression", "value only valid at runtime")
     UNEXPECTED_TYPE_MODIFIER = ("Unexpected Operator", "This operator is only valid in types")
     ADDRESS_OF_UNASSIGNED = ("No Address", "Can only take address of assigned variables")
+    MUTABLE_ADDRESS_OF_CONST = ("Mutability Error", "Can not get mutable pointer to const object")
     UNEXPECTED_STATEMENT = ("Unexpected Statement", "expected an expression got a statement")
     NOT_MUTABLE = ("Assignment Error", "Can not reassign a {} valued name")
     MISSING_TYPE = ("Missing Type", "Procedure arguments need type information")

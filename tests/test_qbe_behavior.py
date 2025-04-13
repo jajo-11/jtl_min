@@ -79,3 +79,6 @@ class TestBehavior(unittest.TestCase):
 
     def test_records(self):
         compile_and_run(self, "../test_files/records.jtl")
+
+if __name__ == "__main__":
+    unittest.main()

@@ -21,8 +21,8 @@ const main = proc() -> int {
     let b = vec.x
     vec.y = b
 
-    var vec2 = @Vec3(3, 2, 1)
-    let y = @vec2.y // take address of field without explicitly dereferencing
+    var vec2 = @var Vec3(3, 2, 1)
+    let y = @var vec2.y // take address of field without explicitly dereferencing
     y^ = -2
     vec2.z = 3
 

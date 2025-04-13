@@ -1,23 +1,23 @@
 // TODO  make the pointers const by default and make you use mut if not
 
-const raw_increment = proc(value: ^int) {
+const raw_increment = proc(value: ^var int) {
     value^ = value^ + 1
 }
 
-const return_increment = proc(value: ^const int) -> int {
+const return_increment = proc(value: ^int) -> int {
     return value^ + 1
 }
 
-const double_indirection = proc(value: ^const ^int) -> int {
+const double_indirection = proc(value: ^^var int) -> int {
     value^^ = value^^ * value^^
     return value^^
 }
 
 const main = proc() -> int {
     var a = 1
-    let ap = @a
+    let ap = @var a
     let b = return_increment(@a) // Automatically cast pointer to mutable to pointer to const
-    raw_increment(@a)
+    raw_increment(@var a)
     let c = double_indirection(@ap)
     return a
 }

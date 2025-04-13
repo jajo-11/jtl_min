@@ -237,7 +237,7 @@ class IRContext:
                         raise NotImplementedError()
                 self.add_instruction(instr(node.token.location, temp, op1, op2))
                 return temp
-            case ASTNodeUnary(token=tok) if tok.op == Operator.ADDRESS_OFF:
+            case ASTNodeUnary(token=tok) if tok.op in (Operator.ADDRESS_OFF, Operator.ADDRESS_OFF_MUTABLE):
                 if isinstance(node.child, ASTNodeValue):
                     assert isinstance(node.child.token, TokenName)
                     address_name = scope.lookup(node.child.token.name)

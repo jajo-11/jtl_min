@@ -148,5 +148,5 @@ class TestParser(unittest.TestCase):
         self.assertEqual(expected_result, result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

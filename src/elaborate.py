@@ -235,10 +235,10 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
     while True:
         match node:
             case ASTNodeUnary() if node.token.op == Operator.POINTER:
-                pointer_to_mutable.append(True)
-                node = node.child
-            case ASTNodeUnary() if node.token.op == Operator.CONSTANT_POINTER:
                 pointer_to_mutable.append(False)
+                node = node.child
+            case ASTNodeUnary() if node.token.op == Operator.MUTABLE_POINTER:
+                pointer_to_mutable.append(True)
                 node = node.child
             case ASTNodeValue() if isinstance(node.token, TokenBuildInType):
                 base_type_id = parent.type_table.new_build_in_type(node.token.type)
@@ -287,50 +287,6 @@ def is_integer(t: Type) -> bool:
     return isinstance(t, (TypeInt, TypeUInt))
 
 
-def check_assignable(node: ASTNode, parent: Scope):
-    """ensure that is indeed assignable, raises ElaborationError"""
-    current_node = node
-    mutable_pointer: Optional[bool] = None
-    while True:
-        match current_node:
-            case ASTNodeValue(token=nt) if isinstance(nt, TokenName):
-                if (name := parent.lookup(nt.name)) is None:
-                    raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME, nt.location)
-
-                if mutable_pointer is None:
-                    if name.mut != Mutability.MUTABLE:
-                        raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
-                                                         nt.location,
-                                                         name.mut)
-                elif not mutable_pointer:
-                    raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
-                                                     nt.location)
-
-                return
-            case ASTNodeUnaryRight(token=top) if top.op == Operator.POINTER:
-                child_type = parent.type_table.get(current_node.child.type)
-                assert isinstance(child_type, TypePointer)
-                if mutable_pointer is None:
-                    mutable_pointer = child_type.target_mutable
-                current_node = current_node.child
-            case ASTNodeBinary(token=dot) if dot.op == Operator.DOT:
-                lhs_type = parent.type_table.get(current_node.left.type)
-                if isinstance(lhs_type, TypePointer):
-                    if not lhs_type.target_mutable:
-                        raise ElaborationError.from_type(ElaborationErrorType.WRITE_TO_CONST_POINTER,
-                                                         node.get_location())
-                    lhs_type = parent.type_table.get(lhs_type.target_type)
-                assert isinstance(lhs_type, TypeRecord)  # or isinstance(lhs_type, TypePointer) and
-                assert isinstance(current_node.right, ASTNodeValue) and isinstance(current_node.right.token, TokenName)
-                if (m := lhs_type.record.fields[current_node.right.token.name].mut) != Mutability.MUTABLE:
-                    raise ElaborationError.from_type(ElaborationErrorType.NOT_MUTABLE,
-                                                     node.get_location(),
-                                                     m)
-                current_node = current_node.left
-            case _:
-                raise ElaborationError.from_type(ElaborationErrorType.UN_ASSIGNABLE, node.token.location)
-
-
 def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     assert node.token.op == Operator.DOT
     lhs = elaborate_expression(parent, node.left, False, None)
@@ -344,8 +300,10 @@ def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     name = node.right.token.name
     if (field_name := lhs_type.record.fields.get(name)) is not None:
         node.type = field_name.type
+        node.mutable = field_name.mut == Mutability.MUTABLE
     else:
         raise ElaborationError.from_type(ElaborationErrorType.EXPECTED_FIELD_NAME, node.right.token.location)
+    node.mutable = node.mutable and lhs.mutable
     return node
 
 
@@ -446,7 +404,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 case Operator.COLON:
                     raise NotImplementedError()  # FIXME: is this even valid anywhere?
                 case Operator.ASSIGNMENT:
-                    check_assignable(node.left, parent)
+                    if not node.left.mutable:
+                        raise ElaborationError.from_type(ElaborationErrorType.UN_ASSIGNABLE, node.left.get_location())
                     if not narrow_type(parent.type_table, node.left.type, node.right.type):
                         raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_ASSIGNMENT,
                                                      node.get_location(),
@@ -475,6 +434,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
 
                     assign = ASTNodeAssignment(node.token, node, node.left, node.right)
                     assign.type = node.type
+                    assign.mutable = node.right.mutable
                     return assign
                 case _:
                     raise RuntimeError(f"Unexpected Operator {node}")
@@ -515,24 +475,34 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     return node
                 case Operator.POINTER:
                     raise ElaborationError.from_type(ElaborationErrorType.UNEXPECTED_TYPE_MODIFIER, node.token.location)
-                case Operator.ADDRESS_OFF:
+                case Operator.ADDRESS_OFF | Operator.ADDRESS_OFF_MUTABLE:
                     # TODO of what can you take an address? Just names or also (some) literals?
-                    # TODO address of record field
+                    want_mutable = node.token.op == Operator.ADDRESS_OFF_MUTABLE
                     if isinstance(operand, ASTNodeValue) and isinstance(operand.token, TokenName):
                         name_of_target = parent.lookup(operand.token.name)
                         if name_of_target is None:
                             raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME,
                                                              operand.token.location)
-                        node.type = parent.type_table.new(TypePointer(operand.type,
-                                                                      name_of_target.mut == Mutability.MUTABLE,
-                                                                      parent.type_table))
+                        if want_mutable and name_of_target.mut:
+                            node.type = parent.type_table.new(TypePointer(operand.type,True,
+                                                                          parent.type_table))
+                        elif not want_mutable:
+                            node.type = parent.type_table.new(TypePointer(operand.type,False,
+                                                                          parent.type_table))
+                        else:
+                            raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
+                                                             node.token.location)
                         return node
                     elif isinstance(ot, TypeRecord):
-                        node.type = parent.type_table.new(TypePointer(operand.type, True, parent.type_table))
+                        # anonymous record
+                        node.type = parent.type_table.new(TypePointer(operand.type, want_mutable,
+                                                                      parent.type_table))
                         return node
                     elif isinstance(operand, ASTNodeBinary) and operand.token.op == Operator.DOT:
-                        # TODO what about constants in records etc.
-                        node.type = parent.type_table.new(TypePointer(operand.type, True, parent.type_table))
+                        if want_mutable and not operand.mutable:
+                            raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
+                                                              node.get_location())
+                        node.type = parent.type_table.new(TypePointer(operand.type, want_mutable, parent.type_table))
                         return node
                     else:
                         raise ElaborationError.from_type(ElaborationErrorType.ADDRESS_OF_UNASSIGNED,
@@ -546,11 +516,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 case _:
                     raise RuntimeError(f"Invalid Unary Operator {node}")
         case ASTNodeUnaryRight():
+            assert node.token.op == Operator.POINTER
             node.child = operand = elaborate_expression(parent, node.child, constant, returnable)
             ot = parent.type_table.get(operand.type)
             if not isinstance(ot, TypePointer):
                 raise JTLTypeError.from_type(JTLTypeErrorType.DEREFERENCE_VALUE, node.token.location, ot)
             node.type = ot.target_type
+            node.mutable = ot.target_mutable
             return node
         case ASTNodeStatement():
             if node.token.keyword == Keyword.RETURN:
@@ -599,6 +571,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                         raise ElaborationError.from_type(ElaborationErrorType.NON_CONSTANT_IN_CONSTANT_EXPRESSION,
                                                          node.token.location)
                     node.type = name_obj.type
+                    node.mutable = name_obj.mut == Mutability.MUTABLE
                     return node
                 case TokenBuildInType():
                     node.type = parent.type_table.new_build_in_type(BuildInType.TYPE)

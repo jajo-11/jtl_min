@@ -148,6 +148,7 @@ class Operator(Enum):
     NOT = "not"
     BITWISE_NOT = "~"
     ADDRESS_OFF = "@"
+    ADDRESS_OFF_MUTABLE = "@var"
     POINTER = "^"
     BITWISE_OR = "|"
     BITWISE_AND = "&"
@@ -155,7 +156,7 @@ class Operator(Enum):
     SHIFT_LEFT = "<<"
     SHIFT_RIGHT = ">>"
     ARROW = "->"
-    CONSTANT_POINTER = "^ const"
+    MUTABLE_POINTER = "^var"
 
     def __str__(self) -> str:
         return self.value

@@ -10,7 +10,9 @@ if TYPE_CHECKING:
 @dataclass
 class ASTNode:
     token: Token
-    type: int = field(init=False)
+    type: int = field(default=0, init=False)
+    # True if you could assign to this or take a mutable pointer
+    mutable: bool = field(default=False, init=False)
 
     def __post_init__(self):
         self.type = 0
@@ -360,7 +362,7 @@ UnaryBindingPower = {
     Operator.NOT: 8.0,
     Operator.BITWISE_NOT: 8.0,
     Operator.POINTER: 9.0,
-    Operator.CONSTANT_POINTER: 9.0,
+    Operator.MUTABLE_POINTER: 9.0,
     Operator.ADDRESS_OFF: 9.0,
 }
 

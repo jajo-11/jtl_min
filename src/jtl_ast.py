@@ -91,14 +91,23 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
             lhs = ASTNodeValue(lhs_token)
         case TokenKeyword(keyword=Keyword.VARARGS):
             lhs = ASTNodeVarArgs(lhs_token)
-        case TokenOperator(op=Operator.POINTER) if isinstance(nxt := it.peak(),
-                                                              TokenKeyword) and nxt.keyword == Keyword.CONSTANT:
+        case TokenOperator(op=Operator.POINTER) if (isinstance(nxt := it.peak(), TokenKeyword)
+                                                    and nxt.keyword == Keyword.VARIABLE):
             it.next()
-            bp_right = UnaryBindingPower[Operator.CONSTANT_POINTER]
+            bp_right = UnaryBindingPower[Operator.MUTABLE_POINTER]
             rhs = parse_expr(it, bp_right, ignore_new_line)
             if rhs is None:
                 return None
-            lhs = ASTNodeUnary(TokenOperator(lhs_token.location, op=Operator.CONSTANT_POINTER), rhs)
+            lhs = ASTNodeUnary(TokenOperator(lhs_token.location.span(nxt.location), op=Operator.MUTABLE_POINTER), rhs)
+        case TokenOperator(op=Operator.ADDRESS_OFF) if (isinstance(nxt := it.peak(), TokenKeyword)
+                                                        and nxt.keyword == Keyword.VARIABLE):
+            it.next()
+            bp_left = UnaryBindingPower[Operator.ADDRESS_OFF]
+            rhs = parse_expr(it, bp_left, ignore_new_line)
+            if rhs is None:
+                return None
+            lhs = ASTNodeUnary(TokenOperator(lhs_token.location.span(nxt.location), op=Operator.ADDRESS_OFF_MUTABLE),
+                               rhs)
         case (TokenOperator(op=Operator.PLUS) | TokenOperator(op=Operator.MINUS)
               | TokenOperator(op=Operator.ADDRESS_OFF) | TokenOperator(op=Operator.POINTER)
               | TokenOperator(op=Operator.NOT) | TokenOperator(op=Operator.BITWISE_NOT)):

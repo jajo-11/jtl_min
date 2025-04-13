@@ -1,4 +1,4 @@
-const printf = external proc(msg: ^const char, varargs)
+const printf = external proc(msg: ^char, varargs)
 
 const main = proc(argc: int, argv: ^^char) -> int {
     printf(c"Hello World! %d\n", argc)
