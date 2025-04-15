@@ -126,6 +126,20 @@ class ASTNodeTupleLike(ASTNode):
         return self.location
 
 @dataclass(slots=True)
+class ASTNodeArrayAccess(ASTNode):
+    token: Token
+    location: CodeLocation
+    index: ASTNode
+    array: ASTNode
+
+    def __str__(self) -> str:
+        return f"([access] {self.index} {self.array})"
+
+    def get_location(self) -> CodeLocation:
+        return self.location
+
+
+@dataclass(slots=True)
 class ASTNodeArrayType(ASTNode):
     token: TokenBracket
     location: CodeLocation

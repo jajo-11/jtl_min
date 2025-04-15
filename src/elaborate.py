@@ -784,11 +784,26 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             rv_transmute.type = target_type
             return rv_transmute
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
-                                                 bracket.type == BracketType.SQUARE and parent is not None):
+                                                 bracket.type == BracketType.SQUARE and node.parent is not None):
             # Array member access
-            raise NotImplementedError()
+            # TODO allow multiple indices
+            assert len(node.children) == 1
+            index = elaborate_expression(parent, node.children[0], constant, None)
+            index_type = parent.type_table.get(index.type)
+            # TODO make sure type inference does not convert this into a float later
+            if not is_integer(index_type):
+                raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_INTEGER, node.children[0].get_location())
+            array = elaborate_expression(parent, node.parent, constant, None)
+            array_type = parent.type_table.get(array.type)
+            if not isinstance(array_type, TypeFixedSizeArray):
+                raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_INTO_NON_ARRAY, array.get_location(), array_type)
+            node_array_access = ASTNodeArrayAccess(node.token, node.get_location(), index, array)
+            node_array_access.type = array_type.base_type
+            node_array_access.mutable = array.mutable
+            return node_array_access
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
-                                                 bracket.type == BracketType.SQUARE and parent is None):
+                                                 bracket.type == BracketType.SQUARE and node.parent is None):
+            # Array literal
             assert node.parent is None
             elaborated_children: List[ASTNode] = []
             assumed_type: Optional[Type] = None

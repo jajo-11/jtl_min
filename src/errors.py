@@ -203,6 +203,8 @@ class JTLTypeErrorType(Enum):
     NOT_A_TYPE = ("Type Error", "Expected a type here but got {}")
     EXPECTED_INT_IMMEDIATE = ("Type Error", "Expected an integer literal but got {}")
     EXPECTED_INT_LARGER_THAN_ZERO = ("Type Error", "Expected an integer larger than zero")
+    INDEX_MUST_BE_INTEGER = ("Type Error", "Index must be an integer")
+    INDEX_INTO_NON_ARRAY = ("Type Error", "Can not index into object of type {}")
 
 
 @dataclass
