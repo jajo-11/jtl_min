@@ -143,7 +143,7 @@ class TypePointer(Type):
         self.type_table = type_table
 
     def __str__(self) -> str:
-        return f"^{"mut" if self.target_mutable else ""}({self.type_table.get(self.target_type)})"
+        return f"^{"var" if self.target_mutable else ""}({self.type_table.get(self.target_type)})"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, TypePointer):

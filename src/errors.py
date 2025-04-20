@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Tuple
 
@@ -203,7 +203,11 @@ class JTLTypeErrorType(Enum):
     NOT_A_TYPE = ("Type Error", "Expected a type here but got {}")
     EXPECTED_INT_IMMEDIATE = ("Type Error", "Expected an integer literal but got {}")
     EXPECTED_INT_LARGER_THAN_ZERO = ("Type Error", "Expected an integer larger than zero")
-    INDEX_MUST_BE_INTEGER = ("Type Error", "Index must be an integer")
+    INDEX_MUST_BE_USIZE = ("Type Error", "Index must be of type usize",
+                           "Unsigned integers smaller than usize are automatically cast to usize")
+    INDEX_CAN_NOT_BE_LARGER_THAN_USIZE = ("Type Error", "Index must be of type usize, this index is {} bit wide and"
+                                                        " indices must be {} bit wide",
+                                          "Unsigned integers smaller than usize are automatically cast to usize")
     INDEX_INTO_NON_ARRAY = ("Type Error", "Can not index into object of type {}")
 
 
@@ -211,10 +215,12 @@ class JTLTypeErrorType(Enum):
 class JTLTypeError(JTLError):
     location: CodeLocation
     fmt_args: Tuple[Any, ...]
+    hint: str = field(default_factory=str)
 
     def __str__(self) -> str:
-        return get_error_with_line_info("Type Error", self.title, self.location, self.message.format(*self.fmt_args))
+        return get_error_with_line_info("Type Error", self.title, self.location,
+                                        self.message.format(*self.fmt_args), hint=self.hint)
 
     @classmethod
     def from_type(cls, type: JTLTypeErrorType, location: CodeLocation, *args) -> "JTLTypeError":
-        return cls(type.value[0], type.value[1], location, args)
+        return cls(type.value[0], type.value[1], location, args, "" if len(type.value) != 3 else type.value[2])

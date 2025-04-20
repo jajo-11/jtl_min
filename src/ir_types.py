@@ -39,6 +39,16 @@ class IRTypeRecord(IRType):
 
 
 @dataclass
+class IRTypeArray(IRType):
+    length: int
+    item_type: IRType
+
+    def __str__(self) -> str:
+        return f"[{self.length}]{self.item_type}"
+
+
+
+@dataclass
 class Register:
     name: str
     type: IRType

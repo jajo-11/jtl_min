@@ -493,12 +493,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                             raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
                                                              node.token.location)
                         return node
-                    elif isinstance(ot, TypeRecord):
-                        # anonymous record
+                    elif isinstance(ot, (TypeRecord, TypeFixedSizeArray)):
+                        # anonymous record or array literal
                         node.type = parent.type_table.new(TypePointer(operand.type, want_mutable,
                                                                       parent.type_table))
                         return node
-                    elif isinstance(operand, ASTNodeBinary) and operand.token.op == Operator.DOT:
+                    elif isinstance(operand, ASTNodeArrayAccess) or (isinstance(operand, ASTNodeBinary) and
+                                                                     operand.token.op == Operator.DOT):
                         if want_mutable and not operand.mutable:
                             raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
                                                               node.get_location())
@@ -672,7 +673,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             return node
         case ASTNodeTupleLike(token=bracket_token, parent=p) if (p is not None and isinstance(bracket_token, TokenBracket)
                                                      and bracket_token.type == BracketType.ROUND):
-            # This is a procedure call
+            # This is a procedure call or record initializer
             # TODO allow more complex situations like module.proc_name() or calling a just defined function
             if not (isinstance(p, ASTNodeValue) and isinstance(p.token, TokenName)):
                 raise ElaborationError.from_type(ElaborationErrorType.NOT_CALLABLE, p.token.location)
@@ -789,12 +790,11 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             # TODO allow multiple indices
             assert len(node.children) == 1
             index = elaborate_expression(parent, node.children[0], constant, None)
-            index_type = parent.type_table.get(index.type)
-            # TODO make sure type inference does not convert this into a float later
-            if not is_integer(index_type):
-                raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_INTEGER, node.children[0].get_location())
+            index = ensure_index_type(index, parent.type_table, node.children[0].get_location())
             array = elaborate_expression(parent, node.parent, constant, None)
             array_type = parent.type_table.get(array.type)
+            if isinstance(array_type, TypePointer):
+                array_type = parent.type_table.get(array_type.target_type)
             if not isinstance(array_type, TypeFixedSizeArray):
                 raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_INTO_NON_ARRAY, array.get_location(), array_type)
             node_array_access = ASTNodeArrayAccess(node.token, node.get_location(), index, array)
@@ -821,12 +821,54 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             node.children = elaborated_children
             node.type = parent.type_table.new(TypeFixedSizeArray(len(elaborated_children), node.children[-1].type,
                                                             parent.type_table))
+
+            # insert a pseudo stack variable if array is not assigned immediately
+            if not direct_assignment:
+                uid = parent.unique_indexer.next()
+                name = Name(
+                    uid,
+                    f"anonymous_array_{uid}",
+                    node.token.location,
+                    node.type,
+                    parent.type_table,
+                    Mutability.MUTABLE,
+                )
+                parent.names[f"anonymous_array{uid}"] = name
+                assignment = ASTNodeAssignment(node.token,
+                                               ASTNodeBinary(
+                                                   TokenOperator(node.token.location, Operator.ASSIGNMENT),
+                                                   ASTNode(node.token),
+                                                   ASTNode(node.token)),
+                                               name,
+                                               node)
+                assignment.type = node.type
+                return assignment
+
             return node
         case ASTNodeRecord():
             raise NotImplementedError("Inline records are not supported yet")
         case _:
             raise RuntimeError(f"Bad ast node in expression {node}")
     raise RuntimeError("This is here so mypy is happy (I am probably missing a return statement somewhere)")
+
+
+def ensure_index_type(index_node: ASTNode, type_table: TypeTable, location: CodeLocation) -> ASTNode:
+    # TODO in the future allow signed ints and do an automatic start at end for negative numbers
+    index_type = type_table.get(index_node.type)
+
+    if not isinstance(index_type, TypeUInt):
+        raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_USIZE, location)
+    elif index_type.size is None:
+        type_table.overwrite(index_node.type, BuildInType.USIZE)
+        return index_node
+    elif index_type.size > PLATFORM_POINTER_SIZE:
+        raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_USIZE, location, index_type.size*8,
+                                     PLATFORM_POINTER_SIZE*8)
+    else:
+        t = type_table.new_build_in_type(BuildInType.USIZE)
+        cast = ASTNodeCast(token=index_node.token, child=index_node)
+        cast.type = t
+        return cast
 
 
 def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:

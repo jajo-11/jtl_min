@@ -67,3 +67,7 @@ class TestIr(unittest.TestCase):
     def test_external_function(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/external_function.jtl")
         self.assertEqual(target_ir, ir_striped)
+
+    def test_arrays(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/arrays.jtl")
+        self.assertEqual(target_ir, ir_striped)

@@ -1,5 +1,57 @@
 const main = proc() -> int {
     var array: [3]i64 = [3, 2, 1]
     array[2] = array[1]
-    return cast(int, array[2])
+
+    var b = @array[2]
+
+    var c = @var[1, 2, 3]
+    c[0] = 4
+
+    return cast(int, b^)
 }
+
+/*
+>>>ir
+procedure i32 @main() {
+    %2_array = alloc 24 align 8
+    %3_b = alloc 8 align 8
+    %4_anonymous_array5 = alloc 24 align 8
+    %5_c = alloc 8 align 8
+    %6 = get_ptr %2_array[0].0
+    store i64 3 into %6
+    %7 = get_ptr %2_array[1].0
+    store i64 2 into %7
+    %8 = get_ptr %2_array[2].0
+    store i64 1 into %8
+    %9 = get_ptr %2_array[1].0
+    %10 = load i64 %9
+    %11 = get_ptr %2_array[2].0
+    store i64 %10 into %11
+    %12 = get_ptr %2_array[2].0
+    store ptr %12 into %3_b
+    %13 = get_ptr %4_anonymous_array5[0].0
+    store i64 1 into %13
+    %14 = get_ptr %4_anonymous_array5[1].0
+    store i64 2 into %14
+    %15 = get_ptr %4_anonymous_array5[2].0
+    store i64 3 into %15
+    store ptr %4_anonymous_array5 into %5_c
+    %16 = load ptr %5_c
+    %17 = get_ptr %16[0].0
+    store i64 4 into %17
+    %18 = load ptr %3_b
+    %19 = load i64 %18
+    %20 = cast i32 %19
+    return %20
+}
+
+ir<<<
+
+>>>stdout
+<<<stdout
+
+>>>stderr
+stderr<<<
+
+[Return Value] 2
+*/
