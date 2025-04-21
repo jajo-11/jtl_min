@@ -10,7 +10,7 @@ from lexer_types import TokenNumberLiteral, TokenName, TokenStringLiteral, Token
     TokenKeyword, TokenBracket, BracketType
 from typing_types import PLATFORM_POINTER_SIZE, PLATFORM_BOOL_SIZE, \
     TypeProcedure, TypePointer, TypeNoValue, TypeInt, TypeUInt, TypeFloat, TypeBool, TypeRecord, TypeType, TypeReturns, \
-    TypeFixedSizeArray, PLATFORM_INT_SIZE
+    TypeFixedSizeArray, PLATFORM_INT_SIZE, Type
 
 BinaryOpToInstruction: Dict[Operator, type[IRBinaryInstruction]] = {
     Operator.PLUS: IRInstAdd,
@@ -314,38 +314,39 @@ class IRContext:
                     case ASTNodeCall() if (record := scope.lookup_record(node.expression.procedure)) is not None:
                         argument_registers = [self.ast_node_to_ir(a, scope) for a in node.expression.arguments]
                         dest_base = self.l_value_to_ir(node.target, scope)
-                        for i, (reg, field) in enumerate(zip(argument_registers, record.get_offsets().values())):
+                        for i, (reg, offset, filed) in enumerate(
+                                zip(argument_registers, record.get_offsets().values(), record.fields.values())):
                             assert reg is not None
                             dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
                             self.add_instruction(IRInstGetElementPointer(node.token.location, dest, dest_base,
-                                                                         Immediate(0, IRTypeUInt(PLATFORM_POINTER_SIZE)),
+                                                                         Immediate(0,
+                                                                                   IRTypeUInt(PLATFORM_POINTER_SIZE)),
                                                                          record.get_size(),
-                                                                         field, i))
-                            self.add_instruction(IRInstStore(node.token.location, dest, reg))
+                                                                         offset, i))
+                            self.store_value(reg, dest, filed.type, node.token.location)
                         return dest_base
                     case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
-                        bracket.type == BracketType.SQUARE and node.expression.parent is None):
+                                                             bracket.type == BracketType.SQUARE and
+                                                             node.expression.parent is None):
                         item_registers = [self.ast_node_to_ir(a, scope) for a in node.expression.children]
                         dest_base = self.l_value_to_ir(node.target, scope)
+                        array_type = self.type_table.get(node.expression.type)
+                        assert isinstance(array_type, TypeFixedSizeArray)
+                        item_type = self.type_table.get(array_type.base_type)
                         for i, item in enumerate(item_registers):
                             assert item is not None
                             dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
-                            self.add_instruction(IRInstGetElementPointer(node.token.location, dest, dest_base,
-                                                                         Immediate(i, IRTypeUInt(PLATFORM_POINTER_SIZE)),
-                                                                         item.type.size, 0, 0))
-                            self.add_instruction(IRInstStore(node.token.location, dest, item))
+                            self.add_instruction(IRInstGetElementPointer(
+                                node.token.location, dest, dest_base, Immediate(i, IRTypeUInt(PLATFORM_POINTER_SIZE)),
+                                item.type.size, 0, 0))
+                            self.store_value(item, dest, item_type, node.token.location)
                         return dest_base
                     case _:
                         value = self.ast_node_to_ir(node.expression, scope)
                         dest = self.l_value_to_ir(node.target, scope)
                         assert value is not None
                         assert isinstance(dest, Register)
-                        expr_type = self.type_table.get(node.expression.type)
-                        if isinstance(expr_type, TypeRecord):
-                            self.add_instruction(
-                                IRInstMemcpy(node.token.location, dest, value, expr_type.record.get_size()))
-                        else:
-                            self.add_instruction(IRInstStore(node.token.location, dest, value))
+                        self.store_value(value, dest, node.target.type, node.token.location)
                         return value
             case ASTNodeStatement():
                 match node.token:
@@ -376,21 +377,27 @@ class IRContext:
                 return dest
             case ASTNodeCall():
                 tt = self.type_table.get(node.procedure.type)
-                if isinstance(tt, TypeProcedure):
-                    proc = self.unit.procedures[node.procedure]
-                    if isinstance(self.type_table.get(tt.return_type), TypeNoValue):
-                        return_register = None
-                    else:
-                        return_register = self.new_temporary(tt.return_type)
-                    arguments = [self.ast_node_to_ir(arg, scope) for arg in node.arguments]
-                    args = cast(List[Register | Immediate], arguments)
-                    self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
-                    return return_register
-                elif isinstance(tt, TypeRecord):
-                    # TODO think if this check makes sense
-                    raise RuntimeError("Should have been handled in assignment")
-                else:
-                    raise RuntimeError("non callable called in ir generation")
+                assert not isinstance(tt, TypeRecord), "Should have been handled in assignment"
+                assert isinstance(tt, TypeProcedure), "non callable called in ir generation"
+                proc = self.unit.procedures[node.procedure]
+
+                arguments = [self.ast_node_to_ir(arg, scope) for arg in node.arguments]
+                assert all(map(lambda x: x is not None, arguments))
+                args = cast(List[Register | Immediate], arguments)
+
+                match self.type_table.get(tt.return_type):
+                    case TypeNoValue():
+                        self.add_instruction(IRInstCall(node.token.location, proc, None, args))
+                        return None
+                    case TypeRecord() | TypeFixedSizeArray():
+                        return_register = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
+                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
+                        return return_register
+                    case _:
+                        assert proc.return_type is not None
+                        return_register = self.new_temporary(proc.return_type)
+                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
+                        return return_register
             case ASTNodeIf():
                 return_type = self.type_table.get(node.type)
                 if isinstance(return_type, TypeNoValue):
@@ -554,13 +561,27 @@ class IRContext:
         for name in function_arguments:
             dest = self.variable_stack_register[name]
             dest_type = self.type_to_ir_type_not_none(name.type)
+            if isinstance(dest_type, (IRTypeArray, IRTypeRecord)):
+                dest_type = IRTypePointer(PLATFORM_POINTER_SIZE)
             src = Register(f"{name.name}", dest_type)
-            if isinstance(dest.type, IRTypeRecord):
-                self.add_instruction(IRInstMemcpy(name.declaration_location, dest, src, dest.type.size))
-            else:
-                self.add_instruction(IRInstStore(name.declaration_location, dest, src))
+            self.store_value(src, dest, name.type, name.declaration_location)
 
         for node in scope.body:
             self.ast_node_to_ir(node, scope)
 
         return None
+
+    def store_value(self, src: Register | Immediate, dest: Register, dest_type: int | Type, location: CodeLocation):
+        if isinstance(dest_type, int):
+            dest_type = self.type_table.get(dest_type)
+        match dest_type:
+            case TypeFixedSizeArray() | TypeRecord():
+                assert isinstance(src.type, IRTypePointer)
+                assert isinstance(dest.type, IRTypePointer)
+                if isinstance(dest_type, TypeRecord):
+                    size = dest_type.record.get_size()
+                else:
+                    size = dest.type.size
+                self.add_instruction(IRInstMemcpy(location, dest, src, size))
+            case _:
+                self.add_instruction(IRInstStore(location, dest, src))

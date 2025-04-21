@@ -864,6 +864,8 @@ def ensure_index_type(index_node: ASTNode, type_table: TypeTable, location: Code
     elif index_type.size > PLATFORM_POINTER_SIZE:
         raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_USIZE, location, index_type.size*8,
                                      PLATFORM_POINTER_SIZE*8)
+    elif index_type.size == PLATFORM_POINTER_SIZE:
+        return index_node
     else:
         t = type_table.new_build_in_type(BuildInType.USIZE)
         cast = ASTNodeCast(token=index_node.token, child=index_node)

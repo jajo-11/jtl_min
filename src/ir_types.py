@@ -372,4 +372,4 @@ class IRUnit:
             out.write("\n")
 
         for name, data in self.data_literals:
-            out.write(f"data %{name} = \"{data}\"\n")
+            out.write(f"data @{name} = \"{data}\"\n")

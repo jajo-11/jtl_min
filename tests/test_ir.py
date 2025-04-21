@@ -71,3 +71,11 @@ class TestIr(unittest.TestCase):
     def test_arrays(self):
         target_ir, ir_striped = eval_and_get_saved_ir("../test_files/arrays.jtl")
         self.assertEqual(target_ir, ir_striped)
+
+    def test_pass_array_by_value(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/pass_array_by_value.jtl")
+        self.assertEqual(target_ir, ir_striped)
+
+    def test_pass_records_by_value(self):
+        target_ir, ir_striped = eval_and_get_saved_ir("../test_files/pass_records_by_value.jtl")
+        self.assertEqual(target_ir, ir_striped)

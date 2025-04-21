@@ -1,0 +1,32 @@
+const printf = external proc (fmt: ^char, varargs)
+
+const Ragged = record {
+    x: i64
+    y: i32
+}
+
+const take_record_modify_and_return = proc (rec: Ragged, multiplier: i64) -> Ragged {
+    var new_record = rec
+    new_rec.x = new_rec.x * multiplier
+    new_rec.y = new_rec.y * cast(i32, multiplier)
+    return new_record
+}
+
+const main = proc () -> int {
+    var original = Ragged(1997, 10)
+    var new = take_record_modify_and_return(original, 2)
+    printf(c"x - old: %d, new: %d\n", original.x, new.x)
+    printf(c"y - old: %d, new: %d\n", original.y, new.y)
+    return 0
+}
+
+/*
+>>>ir
+
+ir<<<
+
+>>>stdout
+x - old: 1997, new: 3994
+y - old: 10, new: 20
+stdout<<<
+*/

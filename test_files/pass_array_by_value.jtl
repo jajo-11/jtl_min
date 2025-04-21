@@ -1,0 +1,100 @@
+const printf = external proc (fmt: ^char, varargs)
+
+const take_array_modify_and_return = proc (arr: [5]i64, multiplier: i64) -> [5]i64 {
+    var i = 0
+    var new_array = arr
+    while i < 5 {
+        new_array[i] = arr[i] * multiplier
+        i = i + 1
+    }
+    return new_array
+}
+
+const main = proc () -> int {
+    var original = [6, 7, 8, 9, 10]
+    var new = take_array_modify_and_return(original, 2)
+    var i = 0
+    while i < 5 {
+        printf(c"%d - old: %d, new: %d\n", i, original[i], new[i])
+    }
+    return 0
+}
+
+/*
+>>>ir
+procedure [5]i64 @1_take_modify_and_return([5]i64 %arr, i64 %multiplier) {
+    %3_arr = alloc 40 align 8
+    %4_multiplier = alloc 8 align 8
+    %5_i = alloc 8 align 8
+    %6_new_array = alloc 40 align 8
+    store [5]i64 %arr into %3_arr
+    store i64 %multiplier into %4_multiplier
+    store u64 0 into %5_i
+    store ptr %3_arr into %6_new_array
+    7_while_head:
+    %10 = load u64 %5_i
+    %11 = less u32 %10, 5
+    jump_if %11 is zero 9_while_end else 8_while_body
+    8_while_body:
+    %12 = load u64 %5_i
+    %13 = get_ptr %3_arr[%12].0
+    %14 = load i64 %13
+    %15 = load i64 %4_multiplier
+    %16 = mul i64 %14, %15
+    %17 = load u64 %5_i
+    %18 = get_ptr %6_new_array[%17].0
+    store i64 %16 into %18
+    %19 = load u64 %5_i
+    %20 = add u64 %19, 1
+    store u64 %20 into %5_i
+    jump 7_while_head
+    9_while_end:
+    return %6_new_array
+}
+
+procedure i32 @main() {
+    %21_original = alloc 40 align 8
+    %22_new = alloc 40 align 8
+    %23_i = alloc 8 align 8
+    %24 = get_ptr %21_original[0].0
+    store i64 6 into %24
+    %25 = get_ptr %21_original[1].0
+    store i64 7 into %25
+    %26 = get_ptr %21_original[2].0
+    store i64 8 into %26
+    %27 = get_ptr %21_original[3].0
+    store i64 9 into %27
+    %28 = get_ptr %21_original[4].0
+    store i64 10 into %28
+    %29 = call [5]i64 @1_take_modify_and_return(ptr %21_original, i64 2)
+    store [5]i64 %29 into %22_new
+    store u64 0 into %23_i
+    30_while_head:
+    %33 = load u64 %23_i
+    %34 = less u32 %33, 5
+    jump_if %34 is zero 32_while_end else 31_while_body
+    31_while_body:
+    %36 = load u64 %23_i
+    %37 = load u64 %23_i
+    %38 = get_ptr %21_original[%37].0
+    %39 = load i64 %38
+    %40 = load u64 %23_i
+    %41 = get_ptr %22_new[%40].0
+    %42 = load i64 %41
+    call @printf(ptr @35, u64 %36, i64 %39, i64 %42)
+    jump 30_while_head
+    32_while_end:
+    return 0
+}
+
+data %35 = "%d - old: %d, new: %d\n"
+ir<<<
+
+>>>stdout
+0 - old: 6, new: 12
+1 - old: 7, new: 14
+2 - old: 8, new: 16
+3 - old: 9, new: 18
+4 - old: 10, new: 20
+stdout<<<
+*/

@@ -48,8 +48,8 @@ procedure i32 @main(i32 %argc, ptr %argv) {
     return 0
 }
 
-data %6 = "Hello World! %d\n"
-data %16 = "%s\n"
+data @6 = "Hello World! %d\n"
+data @16 = "%s\n"
 ir<<<
 
 >>>stdout
