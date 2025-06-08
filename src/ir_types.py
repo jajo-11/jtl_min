@@ -1,4 +1,4 @@
-from typing import Dict, List, TextIO, Optional, Tuple
+from typing import Dict, List, TextIO, Optional, Tuple, Set, Any
 from dataclasses import dataclass, field
 
 from elaboration_types import Name, Record
@@ -9,25 +9,63 @@ from lexer_types import CodeLocation
 class IRType:
     size: int
 
+    def __eq__(self, other: Any) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        raise RuntimeError("IRType should not be instantiated")
+
 
 class IRTypeInt(IRType):
     def __str__(self) -> str:
         return f"i{self.size * 8}"
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypeInt):
+            return False
+        return self.size == other.size
+
+    def __hash__(self) -> int:
+        return hash(("i", self.size))
 
 
 class IRTypeFloat(IRType):
     def __str__(self) -> str:
         return f"f{self.size * 8}"
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypeFloat):
+            return False
+        return self.size == other.size
+
+    def __hash__(self) -> int:
+        return hash(("f", self.size))
+
 
 class IRTypeUInt(IRType):
     def __str__(self) -> str:
         return f"u{self.size * 8}"
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypeUInt):
+            return False
+        return self.size == other.size
+
+    def __hash__(self) -> int:
+        return hash(("u", self.size))
+
 
 class IRTypePointer(IRType):
     def __str__(self) -> str:
         return "ptr"
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypePointer):
+            return False
+        return self.size == other.size
+
+    def __hash__(self) -> int:
+        return hash(("p", self.size))
 
 
 @dataclass
@@ -36,6 +74,14 @@ class IRTypeRecord(IRType):
 
     def __str__(self) -> str:
         return f"&{self.record.name}"
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypeRecord):
+            return False
+        return self.record == other.record
+
+    def __hash__(self) -> int:
+        return hash(self.record)
 
 
 @dataclass
@@ -46,6 +92,13 @@ class IRTypeArray(IRType):
     def __str__(self) -> str:
         return f"[{self.length}]{self.item_type}"
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRTypeArray):
+            return False
+        return self.item_type == other.item_type and self.length == other.length
+
+    def __hash__(self) -> int:
+        return hash((self.item_type, self.length))
 
 
 @dataclass
@@ -66,6 +119,13 @@ class Immediate:
         if isinstance(self.value, str):
             return f"@{self.value}"
         return str(self.value)
+
+@dataclass
+class VarArgMarker:
+    type: str = "" # a fudge to make it more like Immediates
+
+    def __str__(self) -> str:
+        return "...varargs"
 
 @dataclass
 class IRInstruction:
@@ -217,7 +277,7 @@ class IRInstReturn(IRInstruction):
 class IRInstCall(IRInstruction):
     procedure: "IRProcedure"
     dest: Optional[Register]
-    arguments: List[Register | Immediate]
+    arguments: List[Register | Immediate | VarArgMarker]
 
     def __str__(self) -> str:
         args = ', '.join(map(lambda x: f'{x.type} {x}', self.arguments))
@@ -316,6 +376,15 @@ class IRRecord:
     def write(self, out: TextIO):
         out.write(f"&{self.name} = type {', '.join(map(str, self.fields))}")
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, IRRecord):
+            return False
+        return (self.size == other.size and self.name == other.name
+                and all(map(lambda x: x[0] == x[1], zip(self.fields, other.fields))))
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.size, self.fields))
+
 
 @dataclass
 class IRProcedure:
@@ -348,6 +417,7 @@ class IRProcedure:
 class IRUnit:
     procedures: Dict[Name, IRProcedure] = field(default_factory=dict)
     records: Dict[Record, IRRecord] = field(default_factory=dict)
+    fixed_size_arrays: Set[IRTypeArray] = field(default_factory=set)
     alloc_instructions: List[IRInstruction] = field(default_factory=list)
     instructions: List[IRInstruction] = field(default_factory=list)
     data_literals: List[Tuple[str, str]] = field(default_factory=list)

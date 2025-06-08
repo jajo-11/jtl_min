@@ -16,21 +16,22 @@ const main = proc () -> int {
     var i = 0
     while i < 5 {
         printf(c"%d - old: %d, new: %d\n", i, original[i], new[i])
+        i = i + 1
     }
     return 0
 }
 
 /*
 >>>ir
-procedure [5]i64 @1_take_modify_and_return([5]i64 %arr, i64 %multiplier) {
+procedure [5]i64 @1_take_array_modify_and_return([5]i64 %arr, i64 %multiplier) {
     %3_arr = alloc 40 align 8
     %4_multiplier = alloc 8 align 8
     %5_i = alloc 8 align 8
     %6_new_array = alloc 40 align 8
-    store [5]i64 %arr into %3_arr
+    memcpy 40 from %arr to %3_arr
     store i64 %multiplier into %4_multiplier
     store u64 0 into %5_i
-    store ptr %3_arr into %6_new_array
+    memcpy 40 from %3_arr to %6_new_array
     7_while_head:
     %10 = load u64 %5_i
     %11 = less u32 %10, 5
@@ -66,8 +67,8 @@ procedure i32 @main() {
     store i64 9 into %27
     %28 = get_ptr %21_original[4].0
     store i64 10 into %28
-    %29 = call [5]i64 @1_take_modify_and_return(ptr %21_original, i64 2)
-    store [5]i64 %29 into %22_new
+    %29 = call [5]i64 @1_take_array_modify_and_return([5]i64 %21_original, i64 2)
+    memcpy 40 from %29 to %22_new
     store u64 0 into %23_i
     30_while_head:
     %33 = load u64 %23_i
@@ -81,13 +82,16 @@ procedure i32 @main() {
     %40 = load u64 %23_i
     %41 = get_ptr %22_new[%40].0
     %42 = load i64 %41
-    call @printf(ptr @35, u64 %36, i64 %39, i64 %42)
+    call @printf(ptr @35,  ...varargs, u64 %36, i64 %39, i64 %42)
+    %43 = load u64 %23_i
+    %44 = add u64 %43, 1
+    store u64 %44 into %23_i
     jump 30_while_head
     32_while_end:
     return 0
 }
 
-data %35 = "%d - old: %d, new: %d\n"
+data @35 = "%d - old: %d, new: %d\n"
 ir<<<
 
 >>>stdout
@@ -96,5 +100,8 @@ ir<<<
 2 - old: 8, new: 16
 3 - old: 9, new: 18
 4 - old: 10, new: 20
+
 stdout<<<
+
+[Return Value] 0
 */

@@ -57,9 +57,9 @@ def compile_and_run(test: unittest.TestCase, file_name: str) -> (str, str):
     test.assertEqual(cp.stderr.decode(), "")
 
     cp = subprocess.run(["/tmp/test.exe"], capture_output=True)
-    test.assertEqual(cp.returncode, target_return_value)
-    test.assertEqual(cp.stdout.decode(), target_std_output)
-    test.assertEqual(cp.stderr.decode(), target_err_output)
+    test.assertEqual(target_return_value, cp.returncode)
+    test.assertEqual(target_std_output, cp.stdout.decode())
+    test.assertEqual(target_err_output, cp.stderr.decode())
 
 class TestBehavior(unittest.TestCase):
     def test_binary_ops(self):

@@ -3,6 +3,12 @@ from itertools import chain
 from ir_types import *
 from typing_types import PLATFORM_POINTER_SIZE
 
+if PLATFORM_POINTER_SIZE == 4:
+    POINTER_QBE_TYPE = "w"
+else:
+    assert PLATFORM_POINTER_SIZE == 8
+    POINTER_QBE_TYPE = "l"
+
 
 def ir_type_to_qbe(ir_type: IRType) -> str:
     match ir_type:
@@ -19,13 +25,11 @@ def ir_type_to_qbe(ir_type: IRType) -> str:
         case IRTypeFloat(size=8):
             return "d"
         case IRTypeRecord():
-            return f":{ir_type.record.name}"
+            return f":record.{ir_type.record.name}"
+        case IRTypeArray():
+            return f":array.{ir_type.length}.{ir_type.item_type}"
         case IRTypePointer():
-            if PLATFORM_POINTER_SIZE == 4:
-                return "w"
-            else:
-                assert PLATFORM_POINTER_SIZE == 8
-                return "l"
+            return POINTER_QBE_TYPE
         case _:
             raise NotImplementedError()
 
@@ -33,6 +37,10 @@ def ir_type_to_qbe(ir_type: IRType) -> str:
 def record_to_qbe(record: IRRecord) -> str:
     type_list = ", ".join(map(ir_type_to_qbe, record.fields))
     return f"type :record.{record.name} = {{ {type_list} }}"
+
+
+def array_to_qbe(array: IRTypeArray) -> str:
+    return f"type :array.{array.length}.{array.item_type} = {{ {ir_type_to_qbe(array.item_type)} {array.length} }}"
 
 
 def qbe_value(value: Register | Immediate) -> str:
@@ -90,8 +98,8 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
     out_file.write("@start\n")
 
     for inst in chain(procedure.alloc_instructions, procedure.instructions):
-        if not isinstance(inst, (IRInstLabel, IRInstPHI)):
-            out_file.write(f"   dbgloc {inst.location.line_start}, {inst.location.col_start}\n")
+        # if not isinstance(inst, (IRInstLabel, IRInstPHI)):
+        #     out_file.write(f"   dbgloc {inst.location.line_start}, {inst.location.col_start}\n")
         match inst:
             case IRInstLabel():
                 out_file.write(f"@label.{inst.name}\n")
@@ -227,12 +235,15 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 else:
                     out_file.write(f"call $proc.{inst.procedure.name} (")
                 for arg in inst.arguments:
-                    out_file.write(f"{ir_type_to_qbe(arg.type)} {qbe_value(arg)},")
+                    if isinstance(arg, VarArgMarker):
+                        out_file.write(f"..., ")
+                    else:
+                        out_file.write(f"{ir_type_to_qbe(arg.type)} {qbe_value(arg)}, ")
                 out_file.write(")\n")
             case IRInstAllocate():
                 assert inst.alignment in [4, 8, 16]
                 out_file.write(
-                    f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} alloc{inst.alignment} {inst.size}\n")
+                    f"   %reg.{inst.dest.name} ={POINTER_QBE_TYPE} alloc{inst.alignment} {inst.size}\n")
             case IRInstStore():
                 out_file.write(
                     f"   store{ir_type_to_qbe(inst.source.type)} {qbe_value(inst.source)}, {qbe_value(inst.dest)}\n")
@@ -280,6 +291,10 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
 def write_qbe(unit: IRUnit, out_file: TextIO):
     for record in unit.records.values():
         out_file.write(record_to_qbe(record))
+        out_file.write("\n")
+
+    for array in unit.fixed_size_arrays:
+        out_file.write(array_to_qbe(array))
         out_file.write("\n")
 
     if len(unit.records) > 0:

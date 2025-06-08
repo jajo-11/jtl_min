@@ -21,7 +21,7 @@ procedure i32 @main(i32 %argc, ptr %argv) {
     store i32 %argc into %2_argc
     store ptr %argv into %3_argv
     %7 = load i32 %2_argc
-    call @printf(ptr @6, i32 %7)
+    call @printf(ptr @6,  ...varargs, i32 %7)
     store i32 0 into %4_i
     %8 = load ptr %3_argv
     %9 = cast u64 %8
@@ -39,7 +39,7 @@ procedure i32 @main(i32 %argc, ptr %argv) {
     %21 = add u64 %19, %20
     %22 = cast ptr %21
     %23 = load ptr %22
-    call @printf(ptr @16, ptr %23)
+    call @printf(ptr @16,  ...varargs, ptr %23)
     %24 = load i32 %4_i
     %25 = add i32 %24, 1
     store i32 %25 into %4_i

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Dict, List, Any, TYPE_CHECKING, Tuple
 
@@ -90,12 +90,13 @@ class TypeFloat(NamedType):
 
 @dataclass(slots=True)
 class TypeFixedSizeArray(Type):
-    size: int
+    size: Optional[int]
+    n_elements: int
     base_type: int
     type_table: "TypeTable"
 
     def __str__(self) -> str:
-        return f"[{self.size}]{self.type_table.get(self.base_type)}"
+        return f"[{self.n_elements}]{self.type_table.get(self.base_type)}"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, TypeFixedSizeArray):

@@ -85,7 +85,9 @@ class IRContext:
             case TypeFixedSizeArray():
                 item_type = self.type_to_ir_type(t.base_type)
                 assert item_type is not None
-                return IRTypeArray(t.size * item_type.size, t.size, item_type)
+                array_type = IRTypeArray(t.n_elements * item_type.size, t.n_elements, item_type)
+                self.unit.fixed_size_arrays.add(array_type)
+                return array_type
             case TypeType():
                 raise NotImplementedError()
             case TypeReturns():
@@ -385,18 +387,30 @@ class IRContext:
                 assert all(map(lambda x: x is not None, arguments))
                 args = cast(List[Register | Immediate], arguments)
 
+                for reg_imm, elaborated_arg in zip(args, node.arguments):
+                    jtl_type = self.type_table.get(elaborated_arg.type)
+                    match jtl_type:
+                        case TypeFixedSizeArray() | TypeRecord():
+                            reg_imm.type = self.type_to_ir_type_not_none(elaborated_arg.type)
+                        case _:
+                            pass
+
+                args_with_vararg_marker = cast(List[Register | Immediate | VarArgMarker], args)
+                if tt.varargs:
+                    args_with_vararg_marker.insert(len(tt.arguments), VarArgMarker())
+
                 match self.type_table.get(tt.return_type):
                     case TypeNoValue():
-                        self.add_instruction(IRInstCall(node.token.location, proc, None, args))
+                        self.add_instruction(IRInstCall(node.token.location, proc, None, args_with_vararg_marker))
                         return None
                     case TypeRecord() | TypeFixedSizeArray():
-                        return_register = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
-                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
+                        return_register = self.new_temporary(self.type_to_ir_type_not_none(tt.return_type))
+                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
                         return return_register
                     case _:
                         assert proc.return_type is not None
                         return_register = self.new_temporary(proc.return_type)
-                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args))
+                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
                         return return_register
             case ASTNodeIf():
                 return_type = self.type_table.get(node.type)
@@ -576,12 +590,9 @@ class IRContext:
             dest_type = self.type_table.get(dest_type)
         match dest_type:
             case TypeFixedSizeArray() | TypeRecord():
-                assert isinstance(src.type, IRTypePointer)
                 assert isinstance(dest.type, IRTypePointer)
-                if isinstance(dest_type, TypeRecord):
-                    size = dest_type.record.get_size()
-                else:
-                    size = dest.type.size
+                size = dest_type.size
+                assert size is not None
                 self.add_instruction(IRInstMemcpy(location, dest, src, size))
             case _:
                 self.add_instruction(IRInstStore(location, dest, src))

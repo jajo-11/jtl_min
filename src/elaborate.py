@@ -12,6 +12,7 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
     _ = elaborate_scope(scope, nodes, None)
 
     # take literal types whose types could not be inferred and convert them to discrete types
+    fixed_arrays: List[TypeFixedSizeArray] = []
     for i, t in enumerate(scope.type_table.table):
         if i == 0:  # skip sentinel
             continue
@@ -30,8 +31,16 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
                     scope.type_table.overwrite(i, BuildInType.I64)
                 case TypeFloat():
                     scope.type_table.overwrite(i, BuildInType.F64)
+                case TypeFixedSizeArray():
+                    fixed_arrays.append(t)
                 case _:
                     raise RuntimeError(f"Found type {t} with none size in Type Table")
+
+    # FIXME: nested fixed_arrays can break this quiet easily
+    for fa in fixed_arrays:
+        child_size = fa.type_table.get(fa.base_type).size
+        assert child_size is not None
+        fa.size = fa.n_elements * child_size
 
     return scope
 
@@ -270,8 +279,8 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
                 if array_size.token.value <= 0:
                     raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, array_size.get_location())
                 base_type_id = elaborate_type(parent, node.type_expression)
-                base_type_id = parent.type_table.new(TypeFixedSizeArray(array_size.token.value, base_type_id,
-                                                                   parent.type_table))
+                base_type_id = parent.type_table.new(TypeFixedSizeArray(None, array_size.token.value, base_type_id,
+                                                                        parent.type_table))
                 for mut in reversed(pointer_to_mutable):
                     base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
                 return base_type_id
@@ -484,10 +493,10 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                             raise ElaborationError.from_type(ElaborationErrorType.UNDECLARED_NAME,
                                                              operand.token.location)
                         if want_mutable and name_of_target.mut:
-                            node.type = parent.type_table.new(TypePointer(operand.type,True,
+                            node.type = parent.type_table.new(TypePointer(operand.type, True,
                                                                           parent.type_table))
                         elif not want_mutable:
-                            node.type = parent.type_table.new(TypePointer(operand.type,False,
+                            node.type = parent.type_table.new(TypePointer(operand.type, False,
                                                                           parent.type_table))
                         else:
                             raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
@@ -502,7 +511,7 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                                      operand.token.op == Operator.DOT):
                         if want_mutable and not operand.mutable:
                             raise ElaborationError.from_type(ElaborationErrorType.MUTABLE_ADDRESS_OF_CONST,
-                                                              node.get_location())
+                                                             node.get_location())
                         node.type = parent.type_table.new(TypePointer(operand.type, want_mutable, parent.type_table))
                         return node
                     else:
@@ -671,8 +680,9 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             else:
                 node.type = parent.type_table.new(TypeNoValue())
             return node
-        case ASTNodeTupleLike(token=bracket_token, parent=p) if (p is not None and isinstance(bracket_token, TokenBracket)
-                                                     and bracket_token.type == BracketType.ROUND):
+        case ASTNodeTupleLike(token=bracket_token, parent=p) if (
+                    p is not None and isinstance(bracket_token, TokenBracket)
+                    and bracket_token.type == BracketType.ROUND):
             # This is a procedure call or record initializer
             # TODO allow more complex situations like module.proc_name() or calling a just defined function
             if not (isinstance(p, ASTNodeValue) and isinstance(p.token, TokenName)):
@@ -818,9 +828,10 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                                                                                      elaborated_children[0],
                                                                                      elaborated_children[-1])
 
+            assert assumed_type is not None
             node.children = elaborated_children
-            node.type = parent.type_table.new(TypeFixedSizeArray(len(elaborated_children), node.children[-1].type,
-                                                            parent.type_table))
+            node.type = parent.type_table.new(TypeFixedSizeArray(None, len(elaborated_children), node.children[-1].type,
+                                                                 parent.type_table))
 
             # insert a pseudo stack variable if array is not assigned immediately
             if not direct_assignment:
@@ -862,8 +873,8 @@ def ensure_index_type(index_node: ASTNode, type_table: TypeTable, location: Code
         type_table.overwrite(index_node.type, BuildInType.USIZE)
         return index_node
     elif index_type.size > PLATFORM_POINTER_SIZE:
-        raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_USIZE, location, index_type.size*8,
-                                     PLATFORM_POINTER_SIZE*8)
+        raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_MUST_BE_USIZE, location, index_type.size * 8,
+                                     PLATFORM_POINTER_SIZE * 8)
     elif index_type.size == PLATFORM_POINTER_SIZE:
         return index_node
     else:
@@ -1002,6 +1013,7 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
 
 
 castable_type_groups = (TypeInt, TypeUInt, TypeFloat, TypeBool, TypePointer)
+
 
 def can_cast(type_table: TypeTable, a: int, b: int) -> bool:
     at, bt = type_table.get(a), type_table.get(b)

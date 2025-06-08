@@ -1,15 +1,15 @@
 const printf = external proc (fmt: ^char, varargs)
 
 const Ragged = record {
-    x: i64
-    y: i32
+    var x: i64
+    var y: i32
 }
 
 const take_record_modify_and_return = proc (rec: Ragged, multiplier: i64) -> Ragged {
-    var new_record = rec
+    var new_rec = rec
     new_rec.x = new_rec.x * multiplier
     new_rec.y = new_rec.y * cast(i32, multiplier)
-    return new_record
+    return new_rec
 }
 
 const main = proc () -> int {
@@ -28,5 +28,6 @@ ir<<<
 >>>stdout
 x - old: 1997, new: 3994
 y - old: 10, new: 20
+
 stdout<<<
 */
