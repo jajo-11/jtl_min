@@ -85,7 +85,15 @@ class IRContext:
             case TypeFixedSizeArray():
                 item_type = self.type_to_ir_type(t.base_type)
                 assert item_type is not None
-                array_type = IRTypeArray(t.n_elements * item_type.size, t.n_elements, item_type)
+                if isinstance(item_type, IRTypeArray):
+                    align = item_type.align
+                elif isinstance(item_type, IRTypeRecord):
+                    align = item_type.record.align
+                else:
+                    align = item_type.size
+                residual = item_type.size % align
+                size = item_type.size + ((align - residual) if residual > 0 else 0)
+                array_type = IRTypeArray(t.n_elements * size, t.n_elements, item_type, align)
                 self.unit.fixed_size_arrays.add(array_type)
                 return array_type
             case TypeType():
@@ -165,13 +173,20 @@ class IRContext:
     def get_ptr_to_element(self, scope: Scope, node: ASTNodeArrayAccess) -> Register:
         base = self.ast_node_to_ir(node.array, scope)
         assert isinstance(base, Register)
-        assert isinstance(base.type, IRTypePointer) or isinstance(base.type, IRTypeArray)
+
         array_type = self.type_table.get(node.array.type)
         if isinstance(array_type, TypePointer):
             array_type = self.type_table.get(array_type.target_type)
         assert isinstance(array_type, TypeFixedSizeArray)
+
         index = self.ast_node_to_ir(node.index, scope)
         assert index is not None
+
+        return self.get_ptr_to_index(node.token.location, array_type, base, index)
+
+    def get_ptr_to_index(self, location: CodeLocation, array_type: TypeFixedSizeArray, base: Register,
+                         index: Register | Immediate) -> Register:
+        assert isinstance(base.type, IRTypePointer) or isinstance(base.type, IRTypeArray)
         assert isinstance(index.type, IRTypeUInt) and index.type.size is PLATFORM_POINTER_SIZE
 
         array_item_type = self.type_table.get(array_type.base_type)
@@ -180,10 +195,11 @@ class IRContext:
         if isinstance(array_item_type, TypeRecord):
             # pad size to ensure alignment
             alignment = array_item_type.record.get_alignment()
-            item_size = item_size + alignment - (item_size % alignment)
+            residual = item_size % alignment
+            item_size = item_size + ((alignment - residual) if alignment else 0)
 
         ptr_dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
-        self.add_instruction(IRInstGetElementPointer(node.token.location, ptr_dest, base, index, item_size, 0, 0))
+        self.add_instruction(IRInstGetElementPointer(location, ptr_dest, base, index, item_size, 0, 0))
         return ptr_dest
 
     def ast_node_to_ir(self, node: ASTNode, scope: Scope) -> Optional[Register | Immediate]:
@@ -337,10 +353,8 @@ class IRContext:
                         item_type = self.type_table.get(array_type.base_type)
                         for i, item in enumerate(item_registers):
                             assert item is not None
-                            dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
-                            self.add_instruction(IRInstGetElementPointer(
-                                node.token.location, dest, dest_base, Immediate(i, IRTypeUInt(PLATFORM_POINTER_SIZE)),
-                                item.type.size, 0, 0))
+                            dest = self.get_ptr_to_index(node.token.location, array_type, dest_base,
+                                                         Immediate(i, IRTypeUInt(PLATFORM_POINTER_SIZE)))
                             self.store_value(item, dest, item_type, node.token.location)
                         return dest_base
                     case _:
@@ -405,12 +419,14 @@ class IRContext:
                         return None
                     case TypeRecord() | TypeFixedSizeArray():
                         return_register = self.new_temporary(self.type_to_ir_type_not_none(tt.return_type))
-                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
+                        self.add_instruction(
+                            IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
                         return return_register
                     case _:
                         assert proc.return_type is not None
                         return_register = self.new_temporary(proc.return_type)
-                        self.add_instruction(IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
+                        self.add_instruction(
+                            IRInstCall(node.token.location, proc, return_register, args_with_vararg_marker))
                         return return_register
             case ASTNodeIf():
                 return_type = self.type_table.get(node.type)
@@ -500,6 +516,7 @@ class IRContext:
 
             ir_record = IRRecord(
                 name=f"{self.n_temporary}_{record.name}",
+                align=alignment,
                 fields=[],
                 size=size,
             )
@@ -566,7 +583,7 @@ class IRContext:
                     assert isinstance(record_type, TypeRecord)
                     align = record_type.record.get_alignment()
                 case IRTypeArray():
-                    align = dest_type.item_type.size
+                    align = dest_type.align
                 case _:
                     align = dest_type.size
             self.add_allocation(IRInstAllocate(o_name.declaration_location, dest, dest_type.size, align))

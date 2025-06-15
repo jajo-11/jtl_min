@@ -37,6 +37,7 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
                     raise RuntimeError(f"Found type {t} with none size in Type Table")
 
     # FIXME: nested fixed_arrays can break this quiet easily
+    # FIXME: size calculation is off if size is not multiple of alignment
     for fa in fixed_arrays:
         child_size = fa.type_table.get(fa.base_type).size
         assert child_size is not None
@@ -298,7 +299,7 @@ def is_integer(t: Type) -> bool:
 
 def resolve_field(parent: Scope, node: ASTNodeBinary) -> ASTNodeBinary:
     assert node.token.op == Operator.DOT
-    lhs = elaborate_expression(parent, node.left, False, None)
+    node.left = lhs = elaborate_expression(parent, node.left, False, None)
     lhs_type = parent.type_table.get(lhs.type)
     if isinstance(lhs_type, TypePointer):
         lhs_type = parent.type_table.get(lhs_type.target_type)

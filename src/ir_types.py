@@ -88,6 +88,7 @@ class IRTypeRecord(IRType):
 class IRTypeArray(IRType):
     length: int
     item_type: IRType
+    align: int
 
     def __str__(self) -> str:
         return f"[{self.length}]{self.item_type}"
@@ -367,6 +368,7 @@ class IRInstMemcpy(IRInstruction):
 @dataclass
 class IRRecord:
     name: str
+    align: int
     fields: List[IRType]
     size: int
 
@@ -383,7 +385,8 @@ class IRRecord:
                 and all(map(lambda x: x[0] == x[1], zip(self.fields, other.fields))))
 
     def __hash__(self) -> int:
-        return hash((self.name, self.size, self.fields))
+        filed_hashes = tuple(map(hash, self.fields))
+        return hash((self.name, self.size, filed_hashes))
 
 
 @dataclass

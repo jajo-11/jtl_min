@@ -1,0 +1,16 @@
+const printf = external proc (fmt: ^char, varargs)
+
+const Ragged = record {
+    var x: i64
+    var y: i32
+}
+
+const main = proc () -> int {
+    var arr = [Ragged(1, 2), Ragged(3, 4)]
+    var i = 0
+    while i < 2 {
+        printf(c"Item: %d, %d\n", arr[i].x, arr[i].y)
+        i = i + 1
+    }
+    return 0
+}

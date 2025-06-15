@@ -27,7 +27,9 @@ def ir_type_to_qbe(ir_type: IRType) -> str:
         case IRTypeRecord():
             return f":record.{ir_type.record.name}"
         case IRTypeArray():
-            return f":array.{ir_type.length}.{ir_type.item_type}"
+            item_type = str(ir_type.item_type)
+            item_type = "".join(filter(lambda c: c not in "&[]", item_type))
+            return f":array.{ir_type.length}.{item_type}"
         case IRTypePointer():
             return POINTER_QBE_TYPE
         case _:
@@ -36,11 +38,11 @@ def ir_type_to_qbe(ir_type: IRType) -> str:
 
 def record_to_qbe(record: IRRecord) -> str:
     type_list = ", ".join(map(ir_type_to_qbe, record.fields))
-    return f"type :record.{record.name} = {{ {type_list} }}"
+    return f"type :record.{record.name} = align {record.align} {{ {type_list} }}"
 
 
 def array_to_qbe(array: IRTypeArray) -> str:
-    return f"type :array.{array.length}.{array.item_type} = {{ {ir_type_to_qbe(array.item_type)} {array.length} }}"
+    return f"type {ir_type_to_qbe(array)} = {{ {ir_type_to_qbe(array.item_type)} {array.length} }}"
 
 
 def qbe_value(value: Register | Immediate) -> str:
