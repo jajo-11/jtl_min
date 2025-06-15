@@ -14,3 +14,15 @@ const main = proc () -> int {
     }
     return 0
 }
+
+/*
+[Return Value] 0
+>>>stdout
+Item: 1, 2
+Item: 3, 4
+
+stdout<<<
+
+>>>stderr
+stderr<<<
+*/
