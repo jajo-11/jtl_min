@@ -89,5 +89,8 @@ class TestBehavior(unittest.TestCase):
     def test_pass_records_by_value(self):
         compile_and_run(self, "../test_files/pass_records_by_value.jtl")
 
+    def test_pass_ragged_record_array(self):
+        compile_and_run(self, "../test_files/ragged_record_array.jtl")
+
 if __name__ == "__main__":
     unittest.main()
