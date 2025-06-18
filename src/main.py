@@ -34,6 +34,7 @@ if __name__ == '__main__':
     ir.write(sys.stdout)
 
     print("Generating QBE IR...")
+    os.makedirs("../out/", exist_ok=True)
     with open("../out/out.qbe", "w", newline="\n") as f:
         write_qbe(ir, f)
 

@@ -220,7 +220,6 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 out_file.write(f"   %reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} " +
                                f"{op} {qbe_value(inst.op1)}\n")
             case IRInstCast():
-                # TODO missing the extended types not w/l
                 dest_type = ir_type_to_qbe(inst.dest.type)
                 src_type = ir_type_to_qbe(inst.op1.type)
                 out_file.write(f"   %reg.{inst.dest.name} ={dest_type} ")
@@ -277,7 +276,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                 out_file.write(")\n")
             case IRInstAllocate():
                 # TODO: this might let some bad cases through without assertion
-                alignment = 4 if inst.size < 4 else inst.alignment
+                alignment = 4 if inst.alignment < 4 else inst.alignment
                 assert alignment in [4, 8, 16]
                 out_file.write(
                     f"   %reg.{inst.dest.name} ={POINTER_QBE_TYPE} alloc{alignment} {inst.size}\n")

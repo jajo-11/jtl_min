@@ -14,11 +14,15 @@ const add8 = proc (a: u8, b: u8) -> u8 {
 const main = proc () -> int {
     var bob = BunchOfBytes(23, 255, 23, 255)
     bob.a = cast(i8, bob.b * 2)
-    printf(c"%d, %d, %d, %d", bob.a, bob.b, bob.c, bob.d)
+    printf(c"%d, %d, %d, %d\n", bob.a, bob.b, bob.c, bob.d)
     bob.b = add8(bob.b, 1)
     return cast(int, bob.d + bob.b)
 }
 
 /*
+>>>stdout
+-2, 255, 23, 255
+
+stdout<<<
 [Return Value] 255
 */
