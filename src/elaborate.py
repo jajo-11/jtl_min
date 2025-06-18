@@ -12,7 +12,6 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
     _ = elaborate_scope(scope, nodes, None)
 
     # take literal types whose types could not be inferred and convert them to discrete types
-    fixed_arrays: List[TypeFixedSizeArray] = []
     for i, t in enumerate(scope.type_table.table):
         if i == 0:  # skip sentinel
             continue
@@ -32,16 +31,9 @@ def elaborate_module(nodes: List[ASTNode]) -> Scope:
                 case TypeFloat():
                     scope.type_table.overwrite(i, BuildInType.F64)
                 case TypeFixedSizeArray():
-                    fixed_arrays.append(t)
+                    pass
                 case _:
                     raise RuntimeError(f"Found type {t} with none size in Type Table")
-
-    # FIXME: nested fixed_arrays can break this quiet easily
-    # FIXME: size calculation is off if size is not multiple of alignment
-    for fa in fixed_arrays:
-        child_size = fa.type_table.get(fa.base_type).size
-        assert child_size is not None
-        fa.size = fa.n_elements * child_size
 
     return scope
 

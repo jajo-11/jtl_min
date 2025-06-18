@@ -64,7 +64,7 @@ class IRContext:
         t = self.type_table.get(tt)
         if isinstance(t, TypeNoValue):
             return None
-        assert t.size is not None, "IR types can not be zero sized except NO_VALUE"
+        assert t.size is not None or isinstance(t, TypeFixedSizeArray), "IR types can not be zero sized except NO_VALUE"
         match t:
             case TypeInt():
                 return IRTypeInt(t.size)
@@ -93,7 +93,9 @@ class IRContext:
                     align = item_type.size
                 residual = item_type.size % align
                 size = item_type.size + ((align - residual) if residual > 0 else 0)
-                array_type = IRTypeArray(t.n_elements * size, t.n_elements, item_type, align)
+                array_size = t.n_elements * size
+                array_type = IRTypeArray(array_size, t.n_elements, item_type, align)
+                t.size = array_size
                 self.unit.fixed_size_arrays.add(array_type)
                 return array_type
             case TypeType():
