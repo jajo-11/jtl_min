@@ -1,0 +1,24 @@
+const printf = external proc (fmt: ^char, varargs)
+
+const BunchOfBytes = record {
+    var a: i8
+    var b: u8
+    var c: i16
+    var d: u16
+}
+
+const add8 = proc (a: u8, b: u8) -> u8 {
+    return a + b
+}
+
+const main = proc () -> int {
+    var bob = BunchOfBytes(23, 255, 23, 255)
+    bob.a = cast(i8, bob.b * 2)
+    printf(c"%d, %d, %d, %d", bob.a, bob.b, bob.c, bob.d)
+    bob.b = add8(bob.b, 1)
+    return cast(int, bob.d + bob.b)
+}
+
+/*
+[Return Value] 255
+*/

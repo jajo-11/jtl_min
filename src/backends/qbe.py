@@ -1,4 +1,5 @@
 from itertools import chain
+from unittest import case
 
 from ir_types import *
 from typing_types import PLATFORM_POINTER_SIZE
@@ -12,11 +13,11 @@ else:
 
 def ir_type_to_qbe(ir_type: IRType) -> str:
     match ir_type:
-        case IRTypeInt(size=4):
+        case IRTypeInt(size=size) if size <= 4:
             return "w"
         case IRTypeInt(size=8):
             return "l"
-        case IRTypeUInt(size=4):
+        case IRTypeUInt(size=size) if size <= 4:
             return "w"
         case IRTypeUInt(size=8):
             return "l"
@@ -24,25 +25,57 @@ def ir_type_to_qbe(ir_type: IRType) -> str:
             return "s"
         case IRTypeFloat(size=8):
             return "d"
+        case IRTypePointer():
+            return POINTER_QBE_TYPE
+        case _:
+            raise NotImplementedError()
+
+def ir_type_to_qbe_ident(ir_type: IRType) -> Optional[str]:
+    match ir_type:
         case IRTypeRecord():
             return f":record.{ir_type.record.name}"
         case IRTypeArray():
             item_type = str(ir_type.item_type)
             item_type = "".join(filter(lambda c: c not in "&[]", item_type))
             return f":array.{ir_type.length}.{item_type}"
-        case IRTypePointer():
-            return POINTER_QBE_TYPE
         case _:
-            raise NotImplementedError()
+            return None
+
+def ir_type_to_qbe_ext(ir_type: IRType) -> str:
+    match ir_type:
+        case IRTypeInt(size=1) | IRTypeUInt(size=1):
+            return "b"
+        case IRTypeInt(size=2) | IRTypeUInt(size=2):
+            return "h"
+        case _:
+            if (ident := ir_type_to_qbe_ident(ir_type)) is not None:
+                return ident
+            return ir_type_to_qbe(ir_type)
+
+def ir_type_to_qbe_subwty(ir_type: IRType) -> str:
+    match ir_type:
+        case IRTypeInt(size=1):
+            return "sb"
+        case IRTypeUInt(size=1):
+            return "ub"
+        case IRTypeInt(size=2):
+            return "sh"
+        case IRTypeUInt(size=2):
+            return "uh"
+        case _:
+            if (ident := ir_type_to_qbe_ident(ir_type)) is not None:
+                return ident
+            return ir_type_to_qbe(ir_type)
+
 
 
 def record_to_qbe(record: IRRecord) -> str:
-    type_list = ", ".join(map(ir_type_to_qbe, record.fields))
+    type_list = ", ".join(map(ir_type_to_qbe_ext, record.fields))
     return f"type :record.{record.name} = align {record.align} {{ {type_list} }}"
 
 
 def array_to_qbe(array: IRTypeArray) -> str:
-    return f"type {ir_type_to_qbe(array)} = {{ {ir_type_to_qbe(array.item_type)} {array.length} }}"
+    return f"type {ir_type_to_qbe_ident(array)} = {{ {ir_type_to_qbe_ext(array.item_type)} {array.length} }}"
 
 
 def qbe_value(value: Register | Immediate) -> str:
@@ -90,8 +123,8 @@ def write_comparison(inst: IRBinaryInstruction, op: str, out_file: TextIO):
 
 def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
     out_file.write(f"dbgfile \"{procedure.location.file_name}\"\n")
-    return_type = "" if procedure.return_type is None else f"{ir_type_to_qbe(procedure.return_type)} "
-    arguments = ", ".join([f"{ir_type_to_qbe(t)} %reg.{n}" for n, t in procedure.arguments.items()])
+    return_type = "" if procedure.return_type is None else f"{ir_type_to_qbe_subwty(procedure.return_type)} "
+    arguments = ", ".join([f"{ir_type_to_qbe_subwty(t)} %reg.{n}" for n, t in procedure.arguments.items()])
     if procedure.export:
         header = f"export function {return_type}${procedure.name}({arguments}) {{\n"
     else:
@@ -231,7 +264,7 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
             case IRInstCall():
                 out_file.write("   ")
                 if inst.dest is not None:
-                    out_file.write(f"%reg.{inst.dest.name} ={ir_type_to_qbe(inst.dest.type)} ")
+                    out_file.write(f"%reg.{inst.dest.name} ={ir_type_to_qbe_subwty(inst.dest.type)} ")
                 if inst.procedure.export:
                     out_file.write(f"call ${inst.procedure.name} (")
                 else:
@@ -240,15 +273,17 @@ def procedure_to_qbe(procedure: IRProcedure, out_file: TextIO):
                     if isinstance(arg, VarArgMarker):
                         out_file.write(f"..., ")
                     else:
-                        out_file.write(f"{ir_type_to_qbe(arg.type)} {qbe_value(arg)}, ")
+                        out_file.write(f"{ir_type_to_qbe_subwty(arg.type)} {qbe_value(arg)}, ")
                 out_file.write(")\n")
             case IRInstAllocate():
-                assert inst.alignment in [4, 8, 16]
+                # TODO: this might let some bad cases through without assertion
+                alignment = 4 if inst.size < 4 else inst.alignment
+                assert alignment in [4, 8, 16]
                 out_file.write(
-                    f"   %reg.{inst.dest.name} ={POINTER_QBE_TYPE} alloc{inst.alignment} {inst.size}\n")
+                    f"   %reg.{inst.dest.name} ={POINTER_QBE_TYPE} alloc{alignment} {inst.size}\n")
             case IRInstStore():
                 out_file.write(
-                    f"   store{ir_type_to_qbe(inst.source.type)} {qbe_value(inst.source)}, {qbe_value(inst.dest)}\n")
+                    f"   store{ir_type_to_qbe_ext(inst.source.type)} {qbe_value(inst.source)}, {qbe_value(inst.dest)}\n")
             case IRInstLoad():
                 match inst.dest.type:
                     case IRTypeFloat(size=8):
