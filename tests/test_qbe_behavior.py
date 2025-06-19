@@ -95,5 +95,8 @@ class TestBehavior(unittest.TestCase):
     def test_halfs_and_bytes(self):
         compile_and_run(self, "../test_files/halfs_and_bytes.jtl")
 
+    def test_address_of_record_and_array_literal(self):
+        compile_and_run(self, "../test_files/address_of_record_and_array_literal.jtl")
+
 if __name__ == "__main__":
     unittest.main()

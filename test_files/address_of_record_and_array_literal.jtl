@@ -1,0 +1,28 @@
+const some_type = record {
+    var a: i64
+    var b: i64
+}
+
+const sum = proc (st: ^some_type) -> i64 {
+    return st.a + st.b
+}
+
+const sum_arr = proc (arr: ^[5]i64) -> i64 {
+    var sum = 0
+    var i = 0
+    while (i < 5) {
+        sum = sum + arr[i]
+        i = i + 1
+    }
+    return sum
+}
+
+const main = proc () -> int {
+    const sum_a = sum(@some_type(1, 2))
+    const sum_b = sum_arr(@[1, 2, 3, 4, 5])
+    return cast(int, sum_a + sum_b)
+}
+
+/*
+[Return Value] 18
+*/

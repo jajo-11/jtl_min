@@ -478,7 +478,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 case Operator.POINTER:
                     raise ElaborationError.from_type(ElaborationErrorType.UNEXPECTED_TYPE_MODIFIER, node.token.location)
                 case Operator.ADDRESS_OFF | Operator.ADDRESS_OFF_MUTABLE:
-                    # TODO of what can you take an address? Just names or also (some) literals?
+                    # you can only take address of named things, this includes anonymous structs and arrays as they get
+                    # a name assigned automatically
                     want_mutable = node.token.op == Operator.ADDRESS_OFF_MUTABLE
                     if isinstance(operand, ASTNodeValue) and isinstance(operand.token, TokenName):
                         name_of_target = parent.lookup(operand.token.name)
