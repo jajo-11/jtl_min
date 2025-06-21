@@ -1,3 +1,4 @@
+from functools import reduce
 from typing import Tuple
 
 from ast_types import *
@@ -260,19 +261,23 @@ def elaborate_type(parent: Scope, node: ASTNode) -> int:
                     base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
                 return base_type_id
             case ASTNodeArrayType():
-                # TODO this is currently simplified should accept more than one dimension and dimension as constant and not just immediate
-                assert len(node.array_children) == 1
-                array_size = node.array_children[0]
-                array_size = elaborate_expression(parent, array_size, True, None, False)
-                array_size_type = parent.type_table.get(array_size.type)
-                if not (isinstance(array_size, ASTNodeValue) and isinstance(array_size.token, TokenNumberLiteral)
-                        and isinstance(array_size.token.value, int)):
-                    raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, array_size.get_location(),
+                # TODO this is currently simplified should accept not just literals as size but also constants
+                shape = []
+                for size in node.array_children:
+                    size = elaborate_expression(parent, size, True, None, False)
+                    array_size_type = parent.type_table.get(size.type)
+                    if not (isinstance(size, ASTNodeValue) and isinstance(size.token, TokenNumberLiteral) and
+                            isinstance(size.token.value, int)):
+                        raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, size.get_location(),
                                                  array_size_type)
-                if array_size.token.value <= 0:
-                    raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_IMMEDIATE, array_size.get_location())
+                    if size.token.value <= 0:
+                        raise JTLTypeError.from_type(JTLTypeErrorType.EXPECTED_INT_LARGER_THAN_ZERO,
+                                                     size.get_location())
+                    shape.append(size.token.value)
+                total_size = reduce(lambda x, y: x * y, shape, 1)
+
                 base_type_id = elaborate_type(parent, node.type_expression)
-                base_type_id = parent.type_table.new(TypeFixedSizeArray(None, array_size.token.value, base_type_id,
+                base_type_id = parent.type_table.new(TypeFixedSizeArray(None, total_size, shape, base_type_id,
                                                                         parent.type_table))
                 for mut in reversed(pointer_to_mutable):
                     base_type_id = parent.type_table.new(TypePointer(base_type_id, mut, parent.type_table))
@@ -675,8 +680,8 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                 node.type = parent.type_table.new(TypeNoValue())
             return node
         case ASTNodeTupleLike(token=bracket_token, parent=p) if (
-                    p is not None and isinstance(bracket_token, TokenBracket)
-                    and bracket_token.type == BracketType.ROUND):
+                p is not None and isinstance(bracket_token, TokenBracket)
+                and bracket_token.type == BracketType.ROUND):
             # This is a procedure call or record initializer
             # TODO allow more complex situations like module.proc_name() or calling a just defined function
             if not (isinstance(p, ASTNodeValue) and isinstance(p.token, TokenName)):
@@ -802,7 +807,13 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             if not isinstance(array_type, TypeFixedSizeArray):
                 raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_INTO_NON_ARRAY, array.get_location(), array_type)
             node_array_access = ASTNodeArrayAccess(node.token, node.get_location(), index, array)
-            node_array_access.type = array_type.base_type
+            if len(array_type.shape) > 1:
+                node_array_access.type = parent.type_table.new(TypeFixedSizeArray(
+                    None, array_type.n_elements//array_type.shape[0], array_type.shape[1:], array_type.base_type,
+                    parent.type_table
+                ))
+            else:
+                node_array_access.type = array_type.base_type
             node_array_access.mutable = array.mutable
             return node_array_access
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
@@ -821,11 +832,22 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
                     elaborated_children[0], elaborated_children[-1] = promote_either(parent.type_table,
                                                                                      elaborated_children[0],
                                                                                      elaborated_children[-1])
+                else:
+                    if elaborated_children[-1].type != elaborated_children[0].type:
+                        parent.type_table.overwrite(elaborated_children[-1].type, elaborated_children[0].type)
 
             assert assumed_type is not None
             node.children = elaborated_children
-            node.type = parent.type_table.new(TypeFixedSizeArray(None, len(elaborated_children), node.children[-1].type,
-                                                                 parent.type_table))
+            if isinstance(assumed_type, TypeFixedSizeArray):
+                node.type = parent.type_table.new(TypeFixedSizeArray(None,
+                                                  len(elaborated_children)*assumed_type.n_elements,
+                                                  [len(elaborated_children), *assumed_type.shape],
+                                                  assumed_type.base_type,
+                                                  parent.type_table))
+            else:
+                node.type = parent.type_table.new(TypeFixedSizeArray(None, len(elaborated_children),
+                                                                     [len(elaborated_children)], node.children[-1].type,
+                                                                     parent.type_table))
 
             # insert a pseudo stack variable if array is not assigned immediately
             if not direct_assignment:
@@ -940,6 +962,9 @@ def promote_either(type_table: TypeTable, a: ASTNode, b: ASTNode) -> Tuple[ASTNo
     # if same do nothing
     if at == bt:
         # only numeric literals might need to be coerced, to make sure type inference propagates we overwrite
+        if isinstance(bt, TypeFixedSizeArray) and isinstance(at, TypeFixedSizeArray):
+            _, ai = type_table.get_with_table_index(at.base_type)
+            bt, bi = type_table.get_with_table_index(bt.base_type)
         if is_numeric(bt) and bt.size is None and ai != bi:
             type_table.overwrite(a.type, b.type)
         return a, b

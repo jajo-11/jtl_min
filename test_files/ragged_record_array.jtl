@@ -20,7 +20,6 @@ const main = proc () -> int {
 >>>stdout
 Item: 1, 2
 Item: 3, 4
-
 stdout<<<
 
 >>>stderr

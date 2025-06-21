@@ -1,4 +1,5 @@
 from copy import copy
+from functools import reduce
 from typing import cast, Callable
 
 from ast_types import ASTNode, ASTNodeValue, ASTNodeBinary, ASTNodeUnary, ASTNodeAssignment, ASTNodeUnaryRight, \
@@ -192,6 +193,10 @@ class IRContext:
         assert isinstance(index.type, IRTypeUInt) and index.type.size is PLATFORM_POINTER_SIZE
 
         array_item_type = self.type_table.get(array_type.base_type)
+        if len(array_type.shape) > 1:
+            size_multiplier = reduce(lambda x, y: x * y, array_type.shape[1:], 1)
+        else:
+            size_multiplier = 1
         item_size = array_item_type.size
         assert item_size is not None
         if isinstance(array_item_type, TypeRecord):
@@ -199,7 +204,7 @@ class IRContext:
             alignment = array_item_type.record.get_alignment()
             residual = item_size % alignment
             item_size = item_size + ((alignment - residual) if alignment else 0)
-
+        item_size *= size_multiplier
         ptr_dest = self.new_temporary(IRTypePointer(PLATFORM_POINTER_SIZE))
         self.add_instruction(IRInstGetElementPointer(location, ptr_dest, base, index, item_size, 0, 0))
         return ptr_dest
@@ -352,7 +357,7 @@ class IRContext:
                         dest_base = self.l_value_to_ir(node.target, scope)
                         array_type = self.type_table.get(node.expression.type)
                         assert isinstance(array_type, TypeFixedSizeArray)
-                        item_type = self.type_table.get(array_type.base_type)
+                        item_type = node.expression.children[0].type
                         for i, item in enumerate(item_registers):
                             assert item is not None
                             dest = self.get_ptr_to_index(node.token.location, array_type, dest_base,

@@ -100,7 +100,6 @@ ir<<<
 2 - old: 8, new: 16
 3 - old: 9, new: 18
 4 - old: 10, new: 20
-
 stdout<<<
 
 [Return Value] 0

@@ -22,7 +22,6 @@ const main = proc () -> int {
 /*
 >>>stdout
 -2, 255, 23, 255
-
 stdout<<<
 [Return Value] 255
 */

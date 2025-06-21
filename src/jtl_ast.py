@@ -1,5 +1,4 @@
 # file name must be jtl_ast and not ast as not to collide with internal python file ast.py
-from copy import copy
 from typing import Iterable, Tuple
 
 from ast_types import *
@@ -287,7 +286,16 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                         and lhs.token.type == BracketType.SQUARE):
                     if (rhs := parse_expr(it, UnaryBindingPower[Operator.POINTER], ignore_new_line)) is None:
                         return None
-                    lhs = ASTNodeArrayType(lhs.token, lhs.location.span(rhs.get_location()), lhs.children, rhs)
+                    index_list: List[ASTNode] = []
+                    index_stack: List[ASTNodeTupleLike] = [lhs]
+                    parent: ASTNodeTupleLike = lhs
+                    while isinstance(parent.parent, ASTNodeTupleLike):
+                        parent = parent.parent
+                        assert isinstance(parent.token, TokenBracket) and parent.token.type == BracketType.SQUARE
+                        index_stack.append(parent)
+                    for index in reversed(index_stack):
+                        index_list += index.children
+                    lhs = ASTNodeArrayType(lhs.token, lhs.location.span(rhs.get_location()), index_list, rhs)
                 else:
                     raise ParserError.from_type(ParserErrorType.EXPECTED_OPERATOR, op_token.location)
 

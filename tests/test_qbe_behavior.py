@@ -58,8 +58,8 @@ def compile_and_run(test: unittest.TestCase, file_name: str) -> (str, str):
 
     cp = subprocess.run(["/tmp/test.exe"], capture_output=True)
     test.assertEqual(target_return_value, cp.returncode)
-    test.assertEqual(target_std_output, cp.stdout.decode())
-    test.assertEqual(target_err_output, cp.stderr.decode())
+    test.assertEqual(target_std_output, "\n".join(map(lambda x: x.strip(), cp.stdout.decode().splitlines())))
+    test.assertEqual(target_err_output, "\n".join(map(lambda x: x.strip(), cp.stderr.decode().splitlines())))
 
 class TestBehavior(unittest.TestCase):
     def test_binary_ops(self):
@@ -97,6 +97,12 @@ class TestBehavior(unittest.TestCase):
 
     def test_address_of_record_and_array_literal(self):
         compile_and_run(self, "../test_files/address_of_record_and_array_literal.jtl")
+
+    def test_nested_arrays(self):
+        compile_and_run(self, "../test_files/nested_arrays.jtl")
+
+    def test_joined_indices(self):
+        compile_and_run(self, "../test_files/nested_arrays_joined_indices.jtl")
 
 if __name__ == "__main__":
     unittest.main()

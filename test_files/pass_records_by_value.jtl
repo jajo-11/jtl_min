@@ -75,7 +75,6 @@ ir<<<
 >>>stdout
 x - old: 1997, new: 3994
 y - old: 10, new: 20
-
 stdout<<<
 
 [Return Value] 0

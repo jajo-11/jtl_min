@@ -92,11 +92,12 @@ class TypeFloat(NamedType):
 class TypeFixedSizeArray(Type):
     size: Optional[int]
     n_elements: int
+    shape: List[int]
     base_type: int
     type_table: "TypeTable"
 
     def __str__(self) -> str:
-        return f"[{self.n_elements}]{self.type_table.get(self.base_type)}"
+        return f"{self.shape}{self.type_table.get(self.base_type)}"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, TypeFixedSizeArray):
@@ -252,8 +253,8 @@ class TypeTable:
         return self.get_with_table_index(index)[0]
 
     def overwrite(self, old: int, new: int | Type | BuildInType):
-        if old <= 0:
-            raise RuntimeError("Compiler Error tried to alter Sentinel Type")
+        assert old > 0, "Compiler Error tried to alter Sentinel Type"
+        assert old != new, "Compiler Error tried to insert loop into type table"
         current = old
         while isinstance(next_index := self.table[current], int):
             current = next_index
@@ -261,4 +262,5 @@ class TypeTable:
         if isinstance(new, BuildInType):
             self.table[current] = self.build_in_type_map[new]
         else:
+            assert current != new, "Compiler Error tried to insert loop into type table"
             self.table[current] = new
