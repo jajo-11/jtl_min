@@ -209,6 +209,7 @@ class JTLTypeErrorType(Enum):
                                                         " indices must be {} bit wide",
                                           "Unsigned integers smaller than usize are automatically cast to usize")
     INDEX_INTO_NON_ARRAY = ("Type Error", "Can not index into object of type {}")
+    TOO_MANY_INDICES = ("Type Error", "Too many indices for array of shape {}")
 
 
 @dataclass

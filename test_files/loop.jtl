@@ -39,7 +39,7 @@ procedure i32 @main() {
 ir<<<
 
 >>>stdout
-<<<stdout
+stdout<<<
 
 >>>stderr
 stderr<<<

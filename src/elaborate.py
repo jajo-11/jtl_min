@@ -796,25 +796,30 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
                                                  bracket.type == BracketType.SQUARE and node.parent is not None):
             # Array member access
-            # TODO allow multiple indices
-            assert len(node.children) == 1
-            index = elaborate_expression(parent, node.children[0], constant, None)
-            index = ensure_index_type(index, parent.type_table, node.children[0].get_location())
+            indices = []
+            for index in node.children:
+                index_node = elaborate_expression(parent, index, constant, None)
+                index_node = ensure_index_type(index_node, parent.type_table, index.get_location())
+                indices.append(index_node)
             array = elaborate_expression(parent, node.parent, constant, None)
             array_type = parent.type_table.get(array.type)
             if isinstance(array_type, TypePointer):
                 array_type = parent.type_table.get(array_type.target_type)
             if not isinstance(array_type, TypeFixedSizeArray):
                 raise JTLTypeError.from_type(JTLTypeErrorType.INDEX_INTO_NON_ARRAY, array.get_location(), array_type)
-            node_array_access = ASTNodeArrayAccess(node.token, node.get_location(), index, array)
-            if len(array_type.shape) > 1:
-                node_array_access.type = parent.type_table.new(TypeFixedSizeArray(
-                    None, array_type.n_elements//array_type.shape[0], array_type.shape[1:], array_type.base_type,
-                    parent.type_table
-                ))
-            else:
-                node_array_access.type = array_type.base_type
-            node_array_access.mutable = array.mutable
+            if len(indices) > len(array_type.shape):
+                raise JTLTypeError.from_type(JTLTypeErrorType.TOO_MANY_INDICES, node.get_location(), array_type.shape)
+            node_array_access = array
+            for index in indices:
+                node_array_access = ASTNodeArrayAccess(node.token, node.get_location(), index, node_array_access)
+                if len(array_type.shape) > 1:
+                    array_type = TypeFixedSizeArray(
+                        None, array_type.n_elements//array_type.shape[0], array_type.shape[1:], array_type.base_type,
+                        parent.type_table)
+                    node_array_access.type = parent.type_table.new(array_type)
+                else:
+                    node_array_access.type = array_type.base_type
+                node_array_access.mutable = array.mutable
             return node_array_access
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
                                                  bracket.type == BracketType.SQUARE and node.parent is None):
