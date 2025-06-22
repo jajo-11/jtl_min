@@ -943,7 +943,7 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
     # everything after this point has a LITERAL in the bt
 
     # convert int literal to float
-    if isinstance(nt, TypeFloat) and isinstance(bt, TypeInt):
+    if isinstance(nt, TypeFloat) and isinstance(bt, (TypeInt, TypeUInt)):
         type_table.overwrite(broad, narrow)
         return True
 

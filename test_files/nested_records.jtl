@@ -1,0 +1,47 @@
+const printf = external proc (fmt: ^char, varargs)
+
+const Color = record {
+    var r: u8
+    var g: u8
+    var b: u8
+}
+
+const Pixel = record {
+    var x: f64
+    var y: f64
+    var colour: Color
+}
+
+const main = proc () -> int {
+    const screen = [
+        [Pixel(0, 0, Color(255, 0, 0)), Pixel(0, 1, Color(200, 0, 0)), Pixel(0, 2, Color(100, 0, 0))],
+        [Pixel(1, 0, Color(0, 255, 0)), Pixel(1, 1, Color(0, 200, 0)), Pixel(1, 2, Color(0, 100, 0))],
+        [Pixel(2, 0, Color(0, 0, 255)), Pixel(2, 1, Color(0, 0, 200)), Pixel(2, 2, Color(0, 0, 100))],
+    ]
+    var y = 0
+    while (y < 3) {
+        var x = 0
+        while (x < 3) {
+            let pix = screen[x, y]
+            printf(c"x: %.1f, y: %.1f - (%d, %d, %d)\n", pix.x, pix.y, pix.colour.r, screen[x, y].colour.g, pix.colour.b)
+            x = x + 1
+        }
+        y = y + 1
+    }
+    return 0
+}
+
+/*
+[Return Value] 0
+>>>stdout
+x: 0.0, y: 0.0 - (255, 0, 0)
+x: 1.0, y: 0.0 - (0, 255, 0)
+x: 2.0, y: 0.0 - (0, 0, 255)
+x: 0.0, y: 1.0 - (200, 0, 0)
+x: 1.0, y: 1.0 - (0, 200, 0)
+x: 2.0, y: 1.0 - (0, 0, 200)
+x: 0.0, y: 2.0 - (100, 0, 0)
+x: 1.0, y: 2.0 - (0, 100, 0)
+x: 2.0, y: 2.0 - (0, 0, 100)
+stdout<<<
+*/

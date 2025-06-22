@@ -104,5 +104,8 @@ class TestBehavior(unittest.TestCase):
     def test_joined_indices(self):
         compile_and_run(self, "../test_files/nested_arrays_joined_indices.jtl")
 
+    def test_nested_records(self):
+        compile_and_run(self, "../test_files/nested_records.jtl")
+
 if __name__ == "__main__":
     unittest.main()
