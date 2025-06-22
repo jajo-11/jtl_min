@@ -65,6 +65,7 @@ class LexerErrorType(Enum):
     UNIMPLEMENTED = ("Unimplemented operator", "This is a reserved but unused operator")
     INVALID = ("Invalid", "This char is not a valid (part of) operator or name")
     UNTERMINATED_STRING = ("Unterminated string", "Missing terminating \"")
+    UNTERMINATED_EXPONENT = ("Invalid float", "Expected exponent after e")
 
 
 @dataclass

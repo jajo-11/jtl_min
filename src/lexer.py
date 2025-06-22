@@ -192,6 +192,8 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
                     col_nr, char = it.next()
                 if it.peak()[1] == ".":
                     finish_parsing_float(it, line, loc, tokens)
+                elif it.peak()[1] in "eE":
+                    finish_parsing_exponent(it, line, loc, tokens)
                 else:
                     loc.col_stop = col_nr + 1
                     tokens.append(TokenNumberLiteral(loc, int(line[loc.col_start:col_nr + 1])))
@@ -272,7 +274,26 @@ def lex_file(file_name: str, file_contents: str) -> List[Token]:
 
 def finish_parsing_float(it: PeakableIterator, line: str, loc: CodeLocation, tokens: List[Token]):
     col_nr, char = it.next()
+    if it.peak()[1] in "eE":
+        finish_parsing_exponent(it, line, loc, tokens)
+        return
+    while ud.category(it.peak()[1]) in {'Nd'}:
+        col_nr, char = it.next()
+        if it.peak()[1] in "eE":
+            finish_parsing_exponent(it, line, loc, tokens)
+            return
+    loc.col_stop = col_nr + 1
+    tokens.append(TokenNumberLiteral(loc, float(line[loc.col_start:col_nr + 1])))
+
+def finish_parsing_exponent(it: PeakableIterator, line: str, loc: CodeLocation, tokens: List[Token]):
+    col_nr, char = it.next()
+    start_col_nr = col_nr
+    if it.peak()[1] in "+-":
+        col_nr, char = it.next()
+        start_col_nr = col_nr
     while ud.category(it.peak()[1]) in {'Nd'}:
         col_nr, char = it.next()
     loc.col_stop = col_nr + 1
+    if start_col_nr == col_nr:
+        raise LexerError.from_type(LexerErrorType.UNTERMINATED_EXPONENT, loc)
     tokens.append(TokenNumberLiteral(loc, float(line[loc.col_start:col_nr + 1])))

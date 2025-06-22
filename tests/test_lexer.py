@@ -58,7 +58,7 @@ class TestLexer(unittest.TestCase):
             self.assertEqual(x, y)
 
     def test_invalid_char(self):
-        """This does not testa all invalid chars just one"""
+        """This does not test all invalid chars just one"""
         test_content = "nameπ😄!a"
         with self.assertRaises(LexerError) as context:
             lex_file("test_file", test_content)
@@ -102,7 +102,7 @@ class TestLexer(unittest.TestCase):
             col += 1 + len(bit.value)
 
     def test_numbers(self):
-        test_content = "just_a_name123 123 123.456 123.456.789"
+        test_content = "just_a_name123 123 123.456 123.456.789 1e-9 2e+8 1.e-9 1.4e4"
         tokens = lex_file("test_file", test_content)
         expected_tokens = [
             TokenName(CodeLocation("test_file", 0, 0, 0, 14), name="just_a_name123"),
@@ -110,6 +110,10 @@ class TestLexer(unittest.TestCase):
             TokenNumberLiteral(CodeLocation("test_file", 0, 0, 19, 26), value=123.456),
             TokenNumberLiteral(CodeLocation("test_file", 0, 0, 27, 34), value=123.456),
             TokenNumberLiteral(CodeLocation("test_file", 0, 0, 34, 38), value=0.789),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 39, 43), value=1.0e-9),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 44, 48), value=2.0e+8),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 49, 54), value=1.0e-9),
+            TokenNumberLiteral(CodeLocation("test_file", 0, 0, 55, 60), value=1.4e4),
         ]
         for x, y in zip(expected_tokens, tokens):
             self.assertEqual(x, y)
