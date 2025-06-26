@@ -102,7 +102,8 @@ class TypeFixedSizeArray(Type):
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, TypeFixedSizeArray):
             return False
-        return self.size == other.size and self.type_table.get(self.base_type) == self.type_table.get(other.base_type)
+        return (len(self.shape) == len(other.shape) and all(map(lambda xy: xy[0] == xy[1], zip(self.shape, other.shape)))
+                and self.type_table.get(self.base_type) == self.type_table.get(other.base_type))
 
 
 @dataclass(slots=True)

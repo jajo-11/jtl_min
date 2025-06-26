@@ -155,6 +155,7 @@ class ElaborationErrorType(Enum):
     VAR_ARGS_NOT_LAST = ("Invalid Declaration", "the varargs argument must always be the last argument")
     VAR_ARGS_NOT_EXTERNAL = (
     "Invalid Declaration", "the varargs argument is only valid in external procedures (for now)")
+    EXPECTED_ARRAY_LITERAL = ("Invalid Declaration", "expected an expression got an array type")
 
 
 @dataclass

@@ -823,65 +823,88 @@ def elaborate_expression(parent: Scope, node: ASTNode, constant: bool,
             return node_array_access
         case ASTNodeTupleLike(token=bracket) if (isinstance(bracket, TokenBracket) and
                                                  bracket.type == BracketType.SQUARE and node.parent is None):
-            # Array literal
-            assert node.parent is None
-            elaborated_children: List[ASTNode] = []
-            assumed_type: Optional[Type] = None
-            for child in node.children:
-                elaborated_children.append(elaborate_expression(parent, child, constant, returnable))
-                child_type = parent.type_table.get(elaborated_children[-1].type)
-                if assumed_type is None:
-                    assumed_type = child_type
-                elif assumed_type != child_type:
-                    assert len(elaborated_children) > 1
-                    elaborated_children[0], elaborated_children[-1] = promote_either(parent.type_table,
-                                                                                     elaborated_children[0],
-                                                                                     elaborated_children[-1])
-                else:
-                    if elaborated_children[-1].type != elaborated_children[0].type:
-                        parent.type_table.overwrite(elaborated_children[-1].type, elaborated_children[0].type)
+            return elaborate_array_literal(parent, node, constant, returnable, direct_assignment)
+        case ASTNodeArrayType():
+            # also an array literal but with type prefix
+            if (not isinstance(node.type_expression, ASTNodeTupleLike)
+                or not isinstance(node.type_expression.token, TokenBracket)
+                or node.type_expression.token.type != BracketType.SQUARE or node.type_expression.parent is None):
+                raise ElaborationError.from_type(ElaborationErrorType.WRONG_ARGUMENT_TYPE, node.get_location())
+            array_parent_type = node.type_expression.parent
+            node.type_expression.parent = None
+            literal = elaborate_expression(parent, node.type_expression, constant, returnable)
+            node.type_expression = array_parent_type
+            declared_array_type = elaborate_type(parent, node)
 
-            assert assumed_type is not None
-            node.children = elaborated_children
-            if isinstance(assumed_type, TypeFixedSizeArray):
-                node.type = parent.type_table.new(TypeFixedSizeArray(None,
-                                                  len(elaborated_children)*assumed_type.n_elements,
-                                                  [len(elaborated_children), *assumed_type.shape],
-                                                  assumed_type.base_type,
-                                                  parent.type_table))
-            else:
-                node.type = parent.type_table.new(TypeFixedSizeArray(None, len(elaborated_children),
-                                                                     [len(elaborated_children)], node.children[-1].type,
-                                                                     parent.type_table))
+            if not narrow_type(parent.type_table, declared_array_type, literal.type):
+                raise JTLTypeError.from_type(JTLTypeErrorType.TYPE_MISSMATCH_DECLARATION, node.get_location(),
+                                             parent.type_table.get(declared_array_type),
+                                             parent.type_table.get(literal.type))
 
-            # insert a pseudo stack variable if array is not assigned immediately
-            if not direct_assignment:
-                uid = parent.unique_indexer.next()
-                name = Name(
-                    uid,
-                    f"anonymous_array_{uid}",
-                    node.token.location,
-                    node.type,
-                    parent.type_table,
-                    Mutability.MUTABLE,
-                )
-                parent.names[f"anonymous_array{uid}"] = name
-                assignment = ASTNodeAssignment(node.token,
-                                               ASTNodeBinary(
-                                                   TokenOperator(node.token.location, Operator.ASSIGNMENT),
-                                                   ASTNode(node.token),
-                                                   ASTNode(node.token)),
-                                               name,
-                                               node)
-                assignment.type = node.type
-                return assignment
-
-            return node
+            return literal
         case ASTNodeRecord():
             raise NotImplementedError("Inline records are not supported yet")
         case _:
             raise RuntimeError(f"Bad ast node in expression {node}")
     raise RuntimeError("This is here so mypy is happy (I am probably missing a return statement somewhere)")
+
+
+def elaborate_array_literal(parent: Scope, node: ASTNodeTupleLike, constant: bool,
+                         returnable: Optional[ASTNodeProcedure], direct_assignment: bool = False) -> ASTNode:
+    # Array literal
+    assert node.parent is None
+    elaborated_children: List[ASTNode] = []
+    assumed_type: Optional[Type] = None
+    for child in node.children:
+        elaborated_children.append(elaborate_expression(parent, child, constant, returnable))
+        child_type = parent.type_table.get(elaborated_children[-1].type)
+        if assumed_type is None:
+            assumed_type = child_type
+        elif assumed_type != child_type:
+            assert len(elaborated_children) > 1
+            elaborated_children[0], elaborated_children[-1] = promote_either(parent.type_table,
+                                                                             elaborated_children[0],
+                                                                             elaborated_children[-1])
+        else:
+            if elaborated_children[-1].type != elaborated_children[0].type:
+                parent.type_table.overwrite(elaborated_children[-1].type, elaborated_children[0].type)
+
+    assert assumed_type is not None
+    node.children = elaborated_children
+    if isinstance(assumed_type, TypeFixedSizeArray):
+        node.type = parent.type_table.new(TypeFixedSizeArray(None,
+                                                             len(elaborated_children) * assumed_type.n_elements,
+                                                             [len(elaborated_children), *assumed_type.shape],
+                                                             assumed_type.base_type,
+                                                             parent.type_table))
+    else:
+        node.type = parent.type_table.new(TypeFixedSizeArray(None, len(elaborated_children),
+                                                             [len(elaborated_children)], node.children[-1].type,
+                                                             parent.type_table))
+
+    # insert a pseudo stack variable if array is not assigned immediately
+    if not direct_assignment:
+        uid = parent.unique_indexer.next()
+        name = Name(
+            uid,
+            f"anonymous_array_{uid}",
+            node.token.location,
+            node.type,
+            parent.type_table,
+            Mutability.MUTABLE,
+        )
+        parent.names[f"anonymous_array{uid}"] = name
+        assignment = ASTNodeAssignment(node.token,
+                                       ASTNodeBinary(
+                                           TokenOperator(node.token.location, Operator.ASSIGNMENT),
+                                           ASTNode(node.token),
+                                           ASTNode(node.token)),
+                                       name,
+                                       node)
+        assignment.type = node.type
+        return assignment
+
+    return node
 
 
 def ensure_index_type(index_node: ASTNode, type_table: TypeTable, location: CodeLocation) -> ASTNode:
@@ -925,9 +948,9 @@ def narrow_type(type_table: TypeTable, narrow: int, broad: int) -> bool:
 
     # handle fixed size arrays
     if isinstance(nt, TypeFixedSizeArray) and isinstance(bt, TypeFixedSizeArray):
-        if nt.size != bt.size:
-            return False
-        return narrow_type(type_table, nt.base_type, bt.base_type)
+        if len(bt.shape) == len(nt.shape) and all(map(lambda xy: xy[0] == xy[1], zip(bt.shape, nt.shape))):
+            return narrow_type(type_table, nt.base_type, bt.base_type)
+        return False
 
     # unwrap pointers
     while isinstance(nt, TypePointer) and isinstance(bt, TypePointer):

@@ -141,6 +141,7 @@ class ASTNodeArrayAccess(ASTNode):
 
 @dataclass(slots=True)
 class ASTNodeArrayType(ASTNode):
+    """Might also include an array literal"""
     token: TokenBracket
     location: CodeLocation
     array_children: List[ASTNode]

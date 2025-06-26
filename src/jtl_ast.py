@@ -281,7 +281,7 @@ def parse_expr(it: PeakableTokenIterator, bp_in: float = 0.0, ignore_new_line: b
                 else:
                     it.next()
             case _:
-                # This is an array type
+                # This is an array type or an array literal
                 if (isinstance(lhs, ASTNodeTupleLike) and isinstance(lhs.token, TokenBracket)
                         and lhs.token.type == BracketType.SQUARE):
                     if (rhs := parse_expr(it, UnaryBindingPower[Operator.POINTER], ignore_new_line)) is None:
